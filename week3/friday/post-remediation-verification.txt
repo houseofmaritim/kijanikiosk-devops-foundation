@@ -1,0 +1,106 @@
+sudo ufw status numbered
+systemctl status kk-payments
+systemd-analyze security kk-payments.service | head -20
+getfacl: Removing leading '/' from absolute path names
+# file: opt/kijanikiosk/shared/logs/
+# owner: root
+# group: kijanikiosk
+user::rwx
+user:kk-api:rwx
+user:kk-payments:r-x
+group::r-x
+mask::rwx
+other::r-x
+default:user::rwx
+default:user:kk-api:rwx
+default:user:kk-payments:r-x
+default:group::r-x
+default:mask::rwx
+default:other::r-x
+
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # Allow SSH access
+[ 2] 80/tcp                     ALLOW IN    Anywhere                   # Allow HTTP traffic
+[ 3] 3001                       ALLOW IN    10.0.1.0/24                # Monitoring subnet access
+[ 4] 3001 on lo                 ALLOW IN    Anywhere                   # Allow local access to payments
+[ 5] 3001                       DENY IN     Anywhere                   # Block external access to payments
+[ 6] 22/tcp (v6)                ALLOW IN    Anywhere (v6)              # Allow SSH access
+[ 7] 80/tcp (v6)                ALLOW IN    Anywhere (v6)              # Allow HTTP traffic
+[ 8] 3001 (v6) on lo            ALLOW IN    Anywhere (v6)              # Allow local access to payments
+[ 9] 3001 (v6)                  DENY IN     Anywhere (v6)              # Block external access to payments
+
+● kk-payments.service - Kijani Payments Service
+     Loaded: loaded (/etc/systemd/system/kk-payments.service; enabled; vendor preset: enabled)
+     Active: active (running) since Fri 2026-04-03 13:46:36 UTC; 10min ago
+   Main PID: 6267 (sleep)
+      Tasks: 1 (limit: 1099)
+     Memory: 468.0K
+        CPU: 46ms
+     CGroup: /system.slice/kk-payments.service
+             └─6267 /usr/bin/sleep infinity
+  NAME                                                        DESCRIPTION                                                                    EXPOSURE
+✓ PrivateNetwork=                                             Service has no access to the host's network                                    
+✓ User=/DynamicUser=                                          Service runs under a static non-root user identity                             
+✓ CapabilityBoundingSet=~CAP_SET(UID|GID|PCAP)                Service cannot change UID/GID identities/capabilities                          
+✓ CapabilityBoundingSet=~CAP_SYS_ADMIN                        Service has no administrator privileges                                        
+✓ CapabilityBoundingSet=~CAP_SYS_PTRACE                       Service has no ptrace() debugging abilities                                    
+✓ RestrictAddressFamilies=~AF_(INET|INET6)                    Service cannot allocate Internet sockets                                       
+✓ RestrictNamespaces=~CLONE_NEWUSER                           Service cannot create user namespaces                                          
+✓ RestrictAddressFamilies=~…                                  Service cannot allocate exotic sockets                                         
+✓ CapabilityBoundingSet=~CAP_(CHOWN|FSETID|SETFCAP)           Service cannot change file ownership/access mode/capabilities                  
+✓ CapabilityBoundingSet=~CAP_(DAC_*|FOWNER|IPC_OWNER)         Service cannot override UNIX file/IPC permission checks                        
+✓ CapabilityBoundingSet=~CAP_NET_ADMIN                        Service has no network configuration privileges                                
+✓ CapabilityBoundingSet=~CAP_SYS_MODULE                       Service cannot load kernel modules                                             
+✓ CapabilityBoundingSet=~CAP_SYS_RAWIO                        Service has no raw I/O access                                                  
+✓ CapabilityBoundingSet=~CAP_SYS_TIME                         Service processes cannot change the system clock                               
+✗ DeviceAllow=                                                Service has a device ACL with some special devices                                  0.1
+✓ IPAddressDeny=                                              Service blocks all IP address ranges                                           
+✓ KeyringMode=                                                Service doesn't share key material with other services                         
+✓ NoNewPrivileges=                                            Service processes cannot acquire new privileges                                
+✓ NotifyAccess=                                               Service child processes cannot alter service state 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

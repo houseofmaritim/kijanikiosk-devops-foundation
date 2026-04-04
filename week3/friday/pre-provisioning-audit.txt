@@ -1,0 +1,7 @@
+# Dirty state found:
+# - kk-api, kk-payments, kk-logs users already exist
+# - kijanikiosk group exists
+# - /opt/kijanikiosk/config has insecure permissions (777)
+# - logs directory exists but missing ACLs
+# - ufw has existing deny rule on port 3001
+# - curl package is on hold
