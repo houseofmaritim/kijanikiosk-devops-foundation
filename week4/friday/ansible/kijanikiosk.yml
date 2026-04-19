@@ -1,0 +1,53 @@
+---
+- name: KijaniKiosk Capstone Configuration
+  hosts: kijanikiosk
+  become: yes
+  
+  tasks:
+    # Phase 1: Packages
+    - name: Install system packages
+      apt:
+        name: [ufw, logrotate, python3-pip, acl]
+        state: present
+        update_cache: yes
+
+    # Phase 2: Service Accounts
+    - name: Create KijaniKiosk service account
+      user:
+        name: "{{ app_user }}"
+        shell: /usr/sbin/nologin
+        system: yes
+        create_home: no
+
+    # Phase 3: Directory Structure
+    - name: Create application directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+      loop:
+        - "{{ app_dir }}"
+        - "{{ app_dir }}/bin"
+        - "{{ app_dir }}/config"
+        - "{{ app_dir }}/logs"
+
+    # Phase 5: Firewall Rules (Requirement 2 & Challenge C)
+    - name: Configure UFW firewall
+      community.general.ufw:
+        rule: allow
+        port: "{{ item | string }}"
+        proto: tcp
+      loop: "{{ allowed_ports }}"
+
+    - name: Enable UFW
+      community.general.ufw:
+        state: enabled
+
+  handlers:
+    - name: restart kijanikiosk
+      systemd:
+        name: kk-payments
+        state: restarted
+        daemon_reload: yes
