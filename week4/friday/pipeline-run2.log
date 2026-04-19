@@ -1,0 +1,43 @@
+🏗️  Running Terraform Apply...
+[0m[1mmodule.app_servers["logs"].aws_security_group.app: Refreshing state... [id=sg-a0c302d17552fce57][0m
+[0m[1mmodule.app_servers["payments"].aws_security_group.app: Refreshing state... [id=sg-f40252b761d90d4d8][0m
+[0m[1mmodule.app_servers["api"].aws_security_group.app: Refreshing state... [id=sg-ad98cd78a9e8a476c][0m
+[0m[1mmodule.app_servers["api"].aws_instance.this: Refreshing state... [id=i-d950d8638b16be902][0m
+[0m[1mmodule.app_servers["payments"].aws_instance.this: Refreshing state... [id=i-42ed80ebf2a34385f][0m
+[0m[1mmodule.app_servers["logs"].aws_instance.this: Refreshing state... [id=i-0007c1c6af697b5ee][0m
+
+[0m[1m[32mNo changes.[0m[1m Your infrastructure matches the configuration.[0m
+
+[0mTerraform has compared your real infrastructure against your configuration
+and found no differences, so no changes are needed.
+[0m[1m[32m
+Apply complete! Resources: 0 added, 0 changed, 0 destroyed.[0m
+[0m[1m[32m
+Outputs:
+
+[0mansible_inventory = <<EOT
+api ansible_host= ansible_user=ubuntu
+logs ansible_host= ansible_user=ubuntu
+payments ansible_host= ansible_user=ubuntu
+EOT
+server_public_ips = {
+  "api" = ""
+  "logs" = ""
+  "payments" = ""
+}
+📝 Extracting IPs and Building Inventory...
+🛠️  Running Ansible Playbook...
+
+PLAY [KijaniKiosk Capstone Configuration] **************************************
+
+TASK [Gathering Facts] *********************************************************
+[ERROR]: Task failed: Failed to connect to the host via ssh: ssh: connect to host  port 22: Connection refused
+fatal: [api]: UNREACHABLE! => {"changed": false, "msg": "Task failed: Failed to connect to the host via ssh: ssh: connect to host  port 22: Connection refused", "unreachable": true}
+fatal: [logs]: UNREACHABLE! => {"changed": false, "msg": "Task failed: Failed to connect to the host via ssh: ssh: connect to host  port 22: Connection refused", "unreachable": true}
+fatal: [payments]: UNREACHABLE! => {"changed": false, "msg": "Task failed: Failed to connect to the host via ssh: ssh: connect to host  port 22: Connection refused", "unreachable": true}
+
+PLAY RECAP *********************************************************************
+api                        : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+logs                       : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+payments                   : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+

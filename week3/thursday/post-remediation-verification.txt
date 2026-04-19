@@ -1,0 +1,13 @@
+PASS: no rogue process on 3001
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # SSH access
+[ 2] 80/tcp                     ALLOW IN    Anywhere                   # HTTP for nginx
+[ 3] 80/tcp (v6)                ALLOW IN    Anywhere (v6)              # HTTP for nginx
+[ 4] 22/tcp (v6)                ALLOW IN    Anywhere (v6)              # SSH access
+
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda2        24G  3.6G   19G  16% /
+8.0K	/opt/kijanikiosk/shared/logs/

@@ -1,0 +1,20 @@
+× kk-api.service - KijaniKiosk API Service
+     Loaded: loaded (/etc/systemd/system/kk-api.service; enabled; preset: enabled)
+     Active: failed (Result: core-dump) since Tue 2026-03-31 19:37:44 UTC; 30s ago
+   Duration: 157ms
+    Process: 1154 ExecStart=/usr/bin/node /opt/kijanikiosk/api/server.js (code=dumped, signal=TRAP)
+   Main PID: 1154 (code=dumped, signal=TRAP)
+        CPU: 54ms
+
+Warning: some journal files were not opened due to insufficient permissions.
+nginx
+nodejs
+Status: active
+
+To                         Action      From
+--                         ------      ----
+22/tcp                     ALLOW       Anywhere                   # SSH access
+80/tcp                     ALLOW       Anywhere                   # HTTP for nginx
+22/tcp (v6)                ALLOW       Anywhere (v6)              # SSH access
+80/tcp (v6)                ALLOW       Anywhere (v6)              # HTTP for nginx
+

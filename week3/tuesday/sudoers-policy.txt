@@ -1,0 +1,28 @@
+# Amina's restricted sudo policy
+# Replaces unrestricted ALL=(ALL:ALL) NOPASSWD: ALL
+#
+# ABUSE SCENARIOS IF systemctl was unrestricted:
+# 1. sudo systemctl start malicious.service - attacker could install and start
+#    a malicious service as root, gaining full system access
+# 2. sudo systemctl mask ssh - attacker could permanently disable SSH access,
+#    locking the entire team out of the server permanently
+#
+# This policy restricts to specific service units and read-only operations only.
+
+Cmnd_Alias KK_SERVICES = \
+  /usr/bin/systemctl restart kk-api.service, \
+  /usr/bin/systemctl restart kk-payments.service, \
+  /usr/bin/systemctl restart kk-logs.service, \
+  /usr/bin/systemctl status kk-api.service, \
+  /usr/bin/systemctl status kk-payments.service, \
+  /usr/bin/systemctl status kk-logs.service
+
+Cmnd_Alias KK_LOGS = \
+  /usr/bin/journalctl -u kk-api, \
+  /usr/bin/journalctl -u kk-payments, \
+  /usr/bin/journalctl -u kk-logs
+
+Cmnd_Alias KK_NGINX = \
+  /usr/bin/sudoedit /etc/nginx/nginx.conf
+
+amina ALL=(root) NOPASSWD: KK_SERVICES, KK_LOGS, KK_NGINX

@@ -1,27 +1,40 @@
-[INFO] Phase 1: Pre-checks
-[INFO] Phase 2: Users & Groups
-[INFO] kk-api already exists
-[INFO] kk-payments already exists
-[INFO] kk-logs already exists
-[INFO] Group kijanikiosk exists
-[INFO] Phase 3: Packages and dependencies
-[INFO] curl is on hold
-Hit:1 http://archive.ubuntu.com/ubuntu jammy InRelease
-Hit:2 http://security.ubuntu.com/ubuntu jammy-security InRelease
-Hit:3 http://archive.ubuntu.com/ubuntu jammy-updates InRelease
-Hit:4 http://archive.ubuntu.com/ubuntu jammy-backports InRelease
+[06:13:10] [INFO]  === KijaniKiosk Production Provisioning Starting ===
+[06:13:10] [INFO]  === Phase 1: Package Installation ===
+Hit:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease
+Hit:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease
+Hit:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease
+Hit:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease
 Reading package lists...
-[INFO] acl already installed
-[INFO] ufw already installed
-[INFO] Phase 4: Directories and ACLs
-[OK] ACLs applied
-[INFO] Phase 5: Firewall configuration
-Backing up 'user.rules' to '/etc/ufw/user.rules.20260403_142515'
-Backing up 'before.rules' to '/etc/ufw/before.rules.20260403_142515'
-Backing up 'after.rules' to '/etc/ufw/after.rules.20260403_142515'
-Backing up 'user6.rules' to '/etc/ufw/user6.rules.20260403_142515'
-Backing up 'before6.rules' to '/etc/ufw/before6.rules.20260403_142515'
-Backing up 'after6.rules' to '/etc/ufw/after6.rules.20260403_142515'
+[06:13:12] [INFO]  Already installed: nginx
+[06:13:12] [INFO]  Already installed: nodejs
+[06:13:12] [INFO]  Already installed: acl
+[06:13:12] [INFO]  Already installed: ufw
+nginx was already set on hold.
+nodejs was already set on hold.
+[06:13:12] [OK]    Phase 1 complete
+[06:13:12] [INFO]  === Phase 2: Service Accounts ===
+[06:13:12] [INFO]  Already exists: group kijanikiosk
+[06:13:12] [INFO]  Already exists: group kk-api
+[06:13:12] [INFO]  Already exists: kk-api (UID 996)
+[06:13:12] [INFO]  Already exists: group kk-payments
+[06:13:12] [INFO]  Already exists: kk-payments (UID 995)
+[06:13:12] [INFO]  Already exists: group kk-logs
+[06:13:12] [INFO]  Already exists: kk-logs (UID 994)
+[06:13:12] [OK]    Phase 2 complete
+[06:13:12] [INFO]  === Phase 3: Directory Structure ===
+[06:13:12] [INFO]  Already exists: api.env
+[06:13:12] [INFO]  Already exists: payments-api.env
+[06:13:12] [INFO]  Already exists: logs.env
+[06:13:12] [OK]    Phase 3 complete
+[06:13:12] [INFO]  === Phase 4: Systemd Units ===
+[06:13:13] [OK]    Phase 4 complete
+[06:13:13] [INFO]  === Phase 5: Firewall Configuration ===
+Backing up 'user.rules' to '/etc/ufw/user.rules.20260401_061313'
+Backing up 'before.rules' to '/etc/ufw/before.rules.20260401_061313'
+Backing up 'after.rules' to '/etc/ufw/after.rules.20260401_061313'
+Backing up 'user6.rules' to '/etc/ufw/user6.rules.20260401_061313'
+Backing up 'before6.rules' to '/etc/ufw/before6.rules.20260401_061313'
+Backing up 'after6.rules' to '/etc/ufw/after6.rules.20260401_061313'
 
 Default incoming policy changed to 'deny'
 (be sure to update your rules accordingly)
@@ -37,6 +50,33 @@ Rules updated (v6)
 Rules updated
 Rules updated (v6)
 Firewall is active and enabled on system startup
-[OK] Firewall configured
-[INFO] Phase 6: systemd services
-[OK] systemd services created
+[06:13:14] [OK]    Phase 5 complete
+[06:13:14] [INFO]  === Phase 6: Logrotate Configuration ===
+[06:13:14] [OK]    PASS: logrotate config valid
+[06:13:14] [OK]    Phase 6 complete
+[06:13:14] [INFO]  === Phase 7: Journal Persistence ===
+[06:13:14] [INFO]  Updated: SystemMaxUse=500M
+[06:13:14] [OK]    Phase 7 complete
+[06:13:14] [INFO]  === Phase 8: Health Checks ===
+[06:13:14] [OK]    Health check written:
+{"timestamp":"2026-04-01T06:13:14+00:00","kk-api":"down","kk-payments":"down","kk-logs":"down"}
+[06:13:14] [OK]    Phase 8 complete
+[06:13:14] [INFO]  === Phase 9: Final Verification ===
+[06:13:14] [OK]    PASS: nginx installed
+[06:13:14] [OK]    PASS: nodejs installed
+[06:13:14] [OK]    PASS: kk-api exists
+[06:13:14] [OK]    PASS: kk-payments exists
+[06:13:14] [OK]    PASS: kk-logs exists
+[06:13:14] [OK]    PASS: shared/logs exists
+[06:13:14] [OK]    PASS: health check file exists
+[06:13:14] [OK]    PASS: kk-api.service enabled
+[06:13:14] [OK]    PASS: kk-payments.service enabled
+[06:13:14] [OK]    PASS: kk-logs.service enabled
+[06:13:14] [INFO]  kk-api.service security score: 1.4
+[06:13:14] [INFO]  kk-payments.service security score: 1.2
+[06:13:14] [OK]    PASS: ufw active
+[06:13:14] [OK]    PASS: SSH rule present
+[06:13:14] [OK]    PASS: HTTP rule present
+[06:13:14] [OK]    PASS: logrotate config exists
+[06:13:14] [OK]    PASS: journal persistence enabled
+[06:13:14] [OK]    === All checks passed ===

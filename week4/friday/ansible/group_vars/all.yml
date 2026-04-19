@@ -1,0 +1,5 @@
+app_user: kk-payments
+app_dir: /opt/kijanikiosk
+allowed_ports:
+  - 22
+  - 80
