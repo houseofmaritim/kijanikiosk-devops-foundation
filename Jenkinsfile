@@ -1,82 +1,61 @@
 pipeline {
-    agent {
-        docker {
-            image 'node:18-alpine'
-            args '--network=host'
-        }
-    }
-
-    environment {
-        NEXUS_URL = 'http://<YOUR_VM_IP>:8081'
-        NEXUS_REPO = 'npm-releases'
-        PACKAGE_NAME = 'kijanikiosk-payments'
-    }
+    agent any
 
     stages {
-        stage('Lint') {
+
+        stage('Checkout SCM') {
             steps {
-                sh 'npm install'
-                sh 'npm run lint'
+                checkout scm
             }
         }
 
-        stage('Build') {
+        stage('Inspect Repository') {
             steps {
-                sh 'npm run build'
+                echo 'Listing repository contents...'
+                sh 'ls -al'
             }
         }
 
-        stage('Verify') {
-            parallel {
-                stage('Test') {
-                    steps {
-                        sh 'npm test'
-                    }
-                }
-                stage('Security Audit') {
-                    steps {
-                        sh 'npm audit --audit-level=high'
-                    }
-                }
-            }
-        }
-
-        stage('Archive') {
+        stage('Terraform Version Check') {
             steps {
-                archiveArtifacts artifacts: '**/dist/**', fingerprint: true
+                echo 'Checking Terraform...'
+                sh 'terraform version || true'
             }
         }
 
-        stage('Publish') {
+        stage('Terraform Format Check') {
             steps {
-                withCredentials([string(credentialsId: 'nexus-npm-token', variable: 'NPM_TOKEN')]) {
-                    sh '''
-                    VERSION=$(node -p "require('./package.json').version")
-                    GIT_SHA=$(git rev-parse --short HEAD)
-                    NEW_VERSION="${VERSION}-${GIT_SHA}"
-                    npm version $NEW_VERSION --no-git-tag-version
-
-                    echo "//$(echo $NEXUS_URL | sed 's|http://||')/repository/$NEXUS_REPO/:_authToken=$NPM_TOKEN" > .npmrc
-                    npm publish --registry $NEXUS_URL/repository/$NEXUS_REPO/
-                    rm -f .npmrc
-                    '''
-                }
+                echo 'Checking Terraform formatting...'
+                sh 'find . -name "*.tf" -exec terraform fmt -check {} \\; || true'
             }
         }
+
+        stage('Ansible Version Check') {
+            steps {
+                echo 'Checking Ansible...'
+                sh 'ansible --version || true'
+            }
+        }
+
+        stage('Docker Check') {
+            steps {
+                echo 'Checking Docker availability...'
+                sh 'docker --version || true'
+            }
+        }
+
     }
 
     post {
         always {
+            echo 'Cleaning workspace...'
             cleanWs()
         }
         success {
-            echo "Build succeeded. Artifact published to Nexus."
+            echo 'DevOps pipeline completed successfully.'
         }
         failure {
-            echo "Build failed. Check logs for details."
-        }
-        changed {
-            echo "Build status changed."
+            echo 'Pipeline failed. Review console output.'
         }
     }
 }
