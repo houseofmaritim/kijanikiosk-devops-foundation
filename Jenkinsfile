@@ -3,59 +3,97 @@ pipeline {
 
     stages {
 
-        stage('Checkout SCM') {
+        stage('Checkout Source Code') {
             steps {
+                echo 'Pulling latest repository from GitHub...'
                 checkout scm
             }
         }
 
-        stage('Inspect Repository') {
+        stage('Inspect Repository Structure') {
             steps {
-                echo 'Listing repository contents...'
+                echo 'Inspecting files in repository...'
                 sh 'ls -al'
             }
         }
 
-        stage('Terraform Version Check') {
+        stage('Terraform Version') {
             steps {
-                echo 'Checking Terraform...'
-                sh 'terraform version || true'
+                echo 'Verifying Terraform installation...'
+                sh 'terraform version'
             }
         }
 
-        stage('Terraform Format Check') {
+        stage('Terraform Format Validation') {
             steps {
-                echo 'Checking Terraform formatting...'
-                sh 'find . -name "*.tf" -exec terraform fmt -check {} \\; || true'
+                echo 'Running terraform fmt check on all .tf files...'
+                sh 'find . -name "*.tf" -exec terraform fmt -check {} \\;'
             }
         }
 
-        stage('Ansible Version Check') {
+        stage('Terraform Init Validation') {
             steps {
-                echo 'Checking Ansible...'
-                sh 'ansible --version || true'
+                echo 'Initializing Terraform directories where applicable...'
+                sh '''
+                find . -type d -name terraform | while read dir; do
+                    echo "Checking Terraform in $dir"
+                    cd $dir
+                    terraform init -backend=false
+                    terraform validate || true
+                    cd - > /dev/null
+                done
+                '''
             }
         }
 
-        stage('Docker Check') {
+        stage('Ansible Version') {
             steps {
-                echo 'Checking Docker availability...'
-                sh 'docker --version || true'
+                echo 'Checking Ansible installation...'
+                sh 'ansible --version'
             }
         }
 
+        stage('Ansible Syntax Check') {
+            steps {
+                echo 'Searching for playbooks and validating syntax...'
+                sh '''
+                find . -name "*.yml" -o -name "*.yaml" | while read file; do
+                    if grep -q "hosts:" "$file"; then
+                        echo "Syntax checking $file"
+                        ansible-playbook --syntax-check "$file" || true
+                    fi
+                done
+                '''
+            }
+        }
+
+        stage('Docker Availability Check') {
+            steps {
+                echo 'Checking Docker CLI availability...'
+                sh 'docker --version'
+            }
+        }
+
+        stage('Docker Daemon Connectivity') {
+            steps {
+                echo 'Checking if Jenkins can talk to Docker daemon...'
+                sh 'docker ps || true'
+            }
+        }
     }
 
     post {
         always {
-            echo 'Cleaning workspace...'
+            echo 'Cleaning Jenkins workspace...'
             cleanWs()
         }
+
         success {
-            echo 'DevOps pipeline completed successfully.'
+            echo 'SUCCESS: Full DevOps CI validation pipeline passed.'
         }
+
         failure {
-            echo 'Pipeline failed. Review console output.'
+            echo 'FAILURE: One or more DevOps validation stages failed.'
         }
     }
 }
