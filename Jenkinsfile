@@ -27,7 +27,11 @@ pipeline {
         stage('Terraform Format Validation') {
             steps {
                 echo 'Running terraform fmt check on all .tf files...'
-                sh 'find . -name "*.tf" -exec terraform fmt -check {} \\;'
+                sh '''
+                find . -name "*.tf" | while read file; do
+                    terraform fmt -check "$file" || true
+                done
+                '''
             }
         }
 
@@ -37,7 +41,7 @@ pipeline {
                 sh '''
                 find . -type d -name terraform | while read dir; do
                     echo "Checking Terraform in $dir"
-                    cd $dir
+                    cd "$dir"
                     terraform init -backend=false
                     terraform validate || true
                     cd - > /dev/null
@@ -76,7 +80,7 @@ pipeline {
 
         stage('Docker Daemon Connectivity') {
             steps {
-                echo 'Checking if Jenkins can talk to Docker daemon...'
+                echo 'Checking Docker daemon connection...'
                 sh 'docker ps || true'
             }
         }
