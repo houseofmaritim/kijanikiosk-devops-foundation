@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        IMAGE_NAME = "kijanikiosk"
-    }
-
     stages {
 
         stage('Checkout') {
@@ -16,32 +12,45 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build ONLY the app Dockerfile (NOT root Dockerfile)
-                    sh """
-                        docker build -t ${IMAGE_NAME}:latest -f app/Dockerfile .
-                    """
+                    sh 'docker build -t kijanikiosk:latest -f app/Dockerfile .'
                 }
             }
         }
 
         stage('List Docker Images') {
             steps {
-                sh "docker images"
+                script {
+                    sh 'docker images'
+                }
             }
         }
 
         stage('Run Container') {
             steps {
                 script {
-                    // Stop old container if it exists (ignore errors)
-                    sh """
+                    // Remove old container if it exists
+                    sh '''
                         docker rm -f kijani-app || true
-                    """
+                        docker run -d --name kijani-app -p 3000:80 kijanikiosk:latest
+                    '''
+                }
+            }
+        }
 
-                    // Run new container
-                    sh """
-                        docker run -d --name kijani-app -p 3000:80 ${IMAGE_NAME}:latest
-                    """
+        stage('Health Check') {
+            steps {
+                script {
+                    sh '''
+                        echo "Waiting for app to start..."
+                        sleep 5
+
+                        echo "Running health check..."
+
+                        docker run --rm \
+                            --network container:kijani-app \
+                            curlimages/curl:latest \
+                            curl -f http://localhost:80
+                    '''
                 }
             }
         }
@@ -51,6 +60,7 @@ pipeline {
         success {
             echo 'Pipeline completed successfully 🎉'
         }
+
         failure {
             echo 'Pipeline failed ❌ Check logs'
         }
