@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = "kijanikiosk"
+    }
+
     stages {
 
         stage('Checkout') {
@@ -9,23 +13,46 @@ pipeline {
             }
         }
 
-        stage('Verify Workspace') {
-            steps {
-                sh 'pwd'
-                sh 'ls -la'
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t kijanikiosk:latest .'
+                script {
+                    // Build ONLY the app Dockerfile (NOT root Dockerfile)
+                    sh """
+                        docker build -t ${IMAGE_NAME}:latest -f app/Dockerfile .
+                    """
+                }
             }
         }
 
         stage('List Docker Images') {
             steps {
-                sh 'docker images'
+                sh "docker images"
             }
+        }
+
+        stage('Run Container') {
+            steps {
+                script {
+                    // Stop old container if it exists (ignore errors)
+                    sh """
+                        docker rm -f kijani-app || true
+                    """
+
+                    // Run new container
+                    sh """
+                        docker run -d --name kijani-app -p 3000:80 ${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully 🎉'
+        }
+        failure {
+            echo 'Pipeline failed ❌ Check logs'
         }
     }
 }
