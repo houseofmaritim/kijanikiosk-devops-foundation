@@ -12,26 +12,27 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'docker build -t kijanikiosk:latest -f app/Dockerfile .'
+                    def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.IMAGE_TAG = "kijanikiosk:${commit}"
+
+                    sh "docker build -t ${IMAGE_TAG} -f app/Dockerfile ."
+                    sh "docker tag ${IMAGE_TAG} kijanikiosk:latest"
                 }
             }
         }
 
         stage('List Docker Images') {
             steps {
-                script {
-                    sh 'docker images'
-                }
+                sh 'docker images | grep kijanikiosk'
             }
         }
 
         stage('Run Container') {
             steps {
                 script {
-                    // Remove old container if it exists
                     sh '''
-                        docker rm -f kijani-app || true
-                        docker run -d --name kijani-app -p 3000:80 kijanikiosk:latest
+                    docker rm -f kijani-app || true
+                    docker run -d --name kijani-app -p 3000:80 kijanikiosk:latest
                     '''
                 }
             }
@@ -39,19 +40,10 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                script {
-                    sh '''
-                        echo "Waiting for app to start..."
-                        sleep 5
-
-                        echo "Running health check..."
-
-                        docker run --rm \
-                            --network container:kijani-app \
-                            curlimages/curl:latest \
-                            curl -f http://localhost:80
-                    '''
-                }
+                sh '''
+                sleep 5
+                curl -f http://localhost:3000 || exit 1
+                '''
             }
         }
     }
@@ -60,7 +52,6 @@ pipeline {
         success {
             echo 'Pipeline completed successfully 🎉'
         }
-
         failure {
             echo 'Pipeline failed ❌ Check logs'
         }
