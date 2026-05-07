@@ -12,14 +12,9 @@ pipeline {
         stage('Init') {
             steps {
                 script {
-                    env.GIT_COMMIT_SHORT = sh(
-                        script: "git rev-parse --short HEAD",
-                        returnStdout: true
-                    ).trim()
-
-                    env.IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
-
-                    echo "Version: 0.1.${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
+                    def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.VERSION = "0.1.${BUILD_NUMBER}-${commit}"
+                    echo "Version: ${env.VERSION}"
                 }
             }
         }
@@ -37,7 +32,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Building Docker image..."
-                    docker build -t kijanikiosk:${IMAGE_TAG} -f app/Dockerfile .
+                    docker build -t ${IMAGE_NAME}:${VERSION} -f app/Dockerfile .
                 '''
             }
         }
@@ -67,7 +62,7 @@ pipeline {
                     docker rm -f ${CONTAINER_NAME} || true
 
                     echo "Starting container..."
-                    docker run -d --name ${CONTAINER_NAME} -p ${PORT}:80 kijanikiosk:${IMAGE_TAG}
+                    docker run -d --name ${CONTAINER_NAME} -p ${PORT}:80 ${IMAGE_NAME}:${VERSION}
                 '''
             }
         }
@@ -77,13 +72,20 @@ pipeline {
                 sh '''
                     echo "Waiting for container to be ready..."
 
-                    for i in {1..10}; do
+                    for i in $(seq 1 10); do
                         echo "Attempt $i: checking application..."
-                        curl -I http://localhost:${PORT} && break
+                        
+                        if curl -fs http://localhost:${PORT} > /dev/null; then
+                            echo "Application is healthy ✅"
+                            exit 0
+                        fi
 
                         echo "App not ready yet, retrying..."
                         sleep 2
                     done
+
+                    echo "Health check FAILED ❌"
+                    exit 1
                 '''
             }
         }
@@ -92,7 +94,7 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p artifacts
-                    echo "${IMAGE_TAG}" > artifacts/version.txt
+                    echo ${VERSION} > artifacts/version.txt
                 '''
                 archiveArtifacts artifacts: 'artifacts/**'
             }
@@ -108,12 +110,18 @@ pipeline {
                             passwordVariable: 'NEXUS_PASS'
                         )]) {
                             sh '''
-                                echo "Pushing to Nexus..."
-                                echo "Nexus integration placeholder (not blocking build)"
+                                echo "Logging into Nexus..."
+                                echo $NEXUS_PASS | docker login -u $NEXUS_USER --password-stdin
+
+                                echo "Tagging image..."
+                                docker tag ${IMAGE_NAME}:${VERSION} nexus-repo/${IMAGE_NAME}:${VERSION}
+
+                                echo "Pushing image..."
+                                docker push nexus-repo/${IMAGE_NAME}:${VERSION}
                             '''
                         }
                     } catch (Exception e) {
-                        echo "Skipping Nexus push (not configured)"
+                        echo "Skipping Nexus push (not configured or failed)"
                     }
                 }
             }
@@ -131,7 +139,7 @@ pipeline {
         }
 
         failure {
-            echo "Pipeline FAILED ❌ Check logs"
+            echo "Pipeline FAILED ❌"
         }
     }
 }
