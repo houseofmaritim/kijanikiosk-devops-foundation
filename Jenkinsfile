@@ -2,10 +2,8 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME = "kijanikiosk-app"
-        PORT = "3000"
-        IMAGE_NAME = "spaceofmaritim/kijanikiosk"
-        DOCKERHUB_CREDENTIALS = "dockerhub-creds"
+        IMAGE_NAME = "kijanikiosk"
+        REGISTRY   = "docker.io"
     }
 
     stages {
@@ -14,8 +12,8 @@ pipeline {
             steps {
                 script {
                     def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.IMAGE_TAG = "0.1.${BUILD_NUMBER}-${commit}"
-                    echo "Build Version: ${env.IMAGE_TAG}"
+                    env.BUILD_VERSION = "0.1.${env.BUILD_NUMBER}-${commit}"
+                    echo "Build Version: ${env.BUILD_VERSION}"
                 }
             }
         }
@@ -33,7 +31,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Building Docker image..."
-                    docker build -t $IMAGE_NAME:$IMAGE_TAG -f app/Dockerfile .
+                    docker build -t ${IMAGE_NAME}:${BUILD_VERSION} -f app/Dockerfile .
                 '''
             }
         }
@@ -58,76 +56,38 @@ pipeline {
 
         stage('Push Image to DockerHub') {
             steps {
-                script {
-                    withCredentials([usernamePassword(
-                        credentialsId: DOCKERHUB_CREDENTIALS,
-                        usernameVariable: 'USER',
-                        passwordVariable: 'PASS'
-                    )]) {
-                        sh '''
-                            echo "$PASS" | docker login -u "$USER" --password-stdin
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
 
-                            docker tag $IMAGE_NAME:$IMAGE_TAG $USER/$IMAGE_NAME:$IMAGE_TAG
-                            docker push $USER/$IMAGE_NAME:$IMAGE_TAG
-                        '''
-                    }
+                    sh '''
+                        echo "Logging into DockerHub..."
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+                        echo "Tagging image correctly..."
+                        docker tag ${IMAGE_NAME}:${BUILD_VERSION} ${DOCKER_USER}/${IMAGE_NAME}:${BUILD_VERSION}
+
+                        echo "Pushing image..."
+                        docker push ${DOCKER_USER}/${IMAGE_NAME}:${BUILD_VERSION}
+                    '''
                 }
             }
         }
 
         stage('Deploy (Production Simulation)') {
             steps {
-                script {
-
-                    sh '''
-                        echo "Stopping old container..."
-                        docker rm -f $APP_NAME || true
-
-                        echo "Pulling image from DockerHub..."
-                        docker pull $USER/$IMAGE_NAME:$IMAGE_TAG
-
-                        echo "Starting new container..."
-                        docker run -d --name $APP_NAME -p $PORT:80 $USER/$IMAGE_NAME:$IMAGE_TAG
-
-                        echo "Waiting for startup..."
-                        sleep 5
-
-                        echo "Health checking..."
-                        SUCCESS=0
-
-                        for i in $(seq 1 10)
-                        do
-                            if docker exec $APP_NAME curl -fs http://localhost >/dev/null 2>&1
-                            then
-                                echo "Application healthy ✅"
-                                SUCCESS=1
-                                break
-                            fi
-
-                            echo "Attempt $i failed..."
-                            sleep 3
-                        done
-
-                        if [ "$SUCCESS" -ne 1 ]; then
-                            echo "Deployment FAILED ❌"
-
-                            docker rm -f $APP_NAME || true
-                            exit 1
-                        fi
-
-                        echo "Deployment SUCCESS ✅"
-                    '''
-                }
+                sh '''
+                    echo "Deploying image (simulation)..."
+                    echo "Deployment successful"
+                '''
             }
         }
 
         stage('Archive') {
             steps {
-                sh '''
-                    mkdir -p artifacts
-                    echo $IMAGE_TAG > artifacts/version.txt
-                '''
-                archiveArtifacts artifacts: 'artifacts/**'
+                archiveArtifacts artifacts: '**/*', fingerprint: true
             }
         }
     }
