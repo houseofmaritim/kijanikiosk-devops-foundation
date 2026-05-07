@@ -5,17 +5,9 @@ pipeline {
         NEXUS_URL = "localhost:8082"
         NEXUS_REPO = "kijanikiosk-docker"
         IMAGE_NAME = "kijanikiosk"
-        GIT_SHA = ""
     }
 
     stages {
-
-        stage('Checkout Code') {
-            steps {
-                git url: 'https://github.com/houseofmaritim/kijanikiosk-devops-foundation.git',
-                branch: 'feature/week5-ci-pipeline'
-            }
-        }
 
         stage('Init') {
             steps {
@@ -36,12 +28,12 @@ pipeline {
             steps {
                 script {
                     sh """
-                    docker build -t ${IMAGE_NAME}:0.1.0-${GIT_SHA} -f app/Dockerfile .
+                    docker build -t ${IMAGE_NAME}:0.1.0-${env.GIT_SHA} -f app/Dockerfile .
 
-                    docker tag ${IMAGE_NAME}:0.1.0-${GIT_SHA} \
-                        ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${GIT_SHA}
+                    docker tag ${IMAGE_NAME}:0.1.0-${env.GIT_SHA} \
+                        ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${env.GIT_SHA}
 
-                    docker tag ${IMAGE_NAME}:0.1.0-${GIT_SHA} \
+                    docker tag ${IMAGE_NAME}:0.1.0-${env.GIT_SHA} \
                         ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
                     """
                 }
@@ -59,12 +51,10 @@ pipeline {
             steps {
                 script {
                     sh """
-                    echo Removing old container if exists...
                     docker rm -f kijanikiosk-app || true
 
-                    echo Starting container...
                     docker run -d --name kijanikiosk-app -p 3000:80 \
-                        ${IMAGE_NAME}:0.1.0-${GIT_SHA}
+                        ${IMAGE_NAME}:0.1.0-${env.GIT_SHA}
                     """
                 }
             }
@@ -74,25 +64,21 @@ pipeline {
             steps {
                 script {
                     sh """
-                    echo Waiting for container...
                     sleep 5
-
                     docker exec kijanikiosk-app curl -f http://localhost || exit 1
-
-                    echo Application is healthy
+                    echo App is healthy
                     """
                 }
             }
         }
 
-        stage('Docker Login & Push to Nexus') {
+        stage('Push to Nexus') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh """
                     echo "$PASS" | docker login ${NEXUS_URL} -u "$USER" --password-stdin
 
-                    echo Pushing image to Nexus...
-                    docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${GIT_SHA}
+                    docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${env.GIT_SHA}
                     docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
                     """
                 }
