@@ -37,26 +37,21 @@ pipeline {
                 script {
                     sh """
                     docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile .
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${IMAGE_TAG}
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
+
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                        ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${IMAGE_TAG}
+
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                        ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
                     """
                 }
             }
         }
 
         stage('Verify') {
-            parallel {
-                stage('Test') {
-                    steps {
-                        sh 'echo Running unit tests (simulated)'
-                    }
-                }
-
-                stage('Security Audit') {
-                    steps {
-                        sh 'echo Running security audit (simulated)'
-                    }
-                }
+            steps {
+                sh 'echo Running unit tests (simulated)'
+                sh 'echo Running security audit (simulated)'
             }
         }
 
@@ -68,7 +63,8 @@ pipeline {
                     docker rm -f kijanikiosk-app || true
 
                     echo Starting container...
-                    docker run -d --name kijanikiosk-app -p 3000:80 ${IMAGE_NAME}:${IMAGE_TAG}
+                    docker run -d --name kijanikiosk-app -p 3000:80 \
+                        ${IMAGE_NAME}:${IMAGE_TAG}
                     """
                 }
             }
@@ -89,7 +85,7 @@ pipeline {
             }
         }
 
-        stage('Push Docker Image to Nexus') {
+        stage('Docker Login & Push to Nexus') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh """
