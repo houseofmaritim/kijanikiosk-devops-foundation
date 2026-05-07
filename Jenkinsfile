@@ -5,7 +5,7 @@ pipeline {
         NEXUS_URL = "localhost:8082"
         NEXUS_REPO = "kijanikiosk-docker"
         IMAGE_NAME = "kijanikiosk"
-        IMAGE_TAG = "0.1.0-${GIT_COMMIT}"
+        GIT_SHA = ""
     }
 
     stages {
@@ -36,12 +36,12 @@ pipeline {
             steps {
                 script {
                     sh """
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile .
+                    docker build -t ${IMAGE_NAME}:0.1.0-${GIT_SHA} -f app/Dockerfile .
 
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
-                        ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker tag ${IMAGE_NAME}:0.1.0-${GIT_SHA} \
+                        ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${GIT_SHA}
 
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                    docker tag ${IMAGE_NAME}:0.1.0-${GIT_SHA} \
                         ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
                     """
                 }
@@ -59,12 +59,12 @@ pipeline {
             steps {
                 script {
                     sh """
-                    echo Cleaning old container if exists...
+                    echo Removing old container if exists...
                     docker rm -f kijanikiosk-app || true
 
                     echo Starting container...
                     docker run -d --name kijanikiosk-app -p 3000:80 \
-                        ${IMAGE_NAME}:${IMAGE_TAG}
+                        ${IMAGE_NAME}:0.1.0-${GIT_SHA}
                     """
                 }
             }
@@ -79,7 +79,7 @@ pipeline {
 
                     docker exec kijanikiosk-app curl -f http://localhost || exit 1
 
-                    echo App is healthy
+                    echo Application is healthy
                     """
                 }
             }
@@ -92,7 +92,7 @@ pipeline {
                     echo "$PASS" | docker login ${NEXUS_URL} -u "$USER" --password-stdin
 
                     echo Pushing image to Nexus...
-                    docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${IMAGE_TAG}
+                    docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${GIT_SHA}
                     docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
                     """
                 }
