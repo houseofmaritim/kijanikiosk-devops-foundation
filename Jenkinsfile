@@ -20,7 +20,7 @@ pipeline {
 
         stage('Lint') {
             steps {
-                sh 'echo "Lint stage: placeholder for code quality checks"'
+                sh 'echo "Lint stage: placeholder"'
             }
         }
 
@@ -54,8 +54,19 @@ pipeline {
         stage('Run Container') {
             steps {
                 script {
+
                     sh """
+                        echo "Cleaning old container (if exists)..."
                         docker rm -f ${IMAGE_NAME}-app || true
+
+                        echo "Freeing port 3000 if used..."
+                        PID=\$(docker ps --filter publish=3000 -q)
+                        if [ ! -z "\$PID" ]; then
+                            docker stop \$PID || true
+                            docker rm -f \$PID || true
+                        fi
+
+                        echo "Starting new container..."
                         docker run -d --name ${IMAGE_NAME}-app -p 3000:80 ${IMAGE_NAME}:${VERSION}-${GIT_SHA}
                     """
                 }
@@ -74,7 +85,7 @@ pipeline {
                                 echo "App is healthy"
                                 exit 0
                             fi
-                            echo "Not ready yet... retrying in 3s"
+                            echo "Retrying..."
                             sleep 3
                         done
 
@@ -89,7 +100,6 @@ pipeline {
             steps {
                 script {
 
-                    // Get Nexus container IP safely
                     def nexusIp = sh(
                         script: "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' nexus",
                         returnStdout: true
@@ -101,8 +111,7 @@ pipeline {
                             echo "Packaging artifact..."
                             tar -czf ${IMAGE_NAME}-${GIT_SHA}.tar.gz app/
 
-                            echo "Uploading artifact to Nexus at ${nexusIp}"
-
+                            echo "Uploading to Nexus..."
                             curl -u ${NEXUS_USER}:${NEXUS_PASS} \
                                 --upload-file ${IMAGE_NAME}-${GIT_SHA}.tar.gz \
                                 http://${nexusIp}:8081/repository/${NEXUS_REPO}/${IMAGE_NAME}-${VERSION}-${GIT_SHA}.tar.gz
