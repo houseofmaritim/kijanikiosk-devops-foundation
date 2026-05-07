@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         IMAGE_NAME = "kijanikiosk"
-        IMAGE_TAG = "${env.BUILD_NUMBER}-${GIT_COMMIT.substring(0,7)}"
         CONTAINER_NAME = "kijanikiosk-app"
         PORT = "3000"
     }
@@ -13,8 +12,14 @@ pipeline {
         stage('Init') {
             steps {
                 script {
-                    env.GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    echo "Version: 0.1.${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+
+                    env.IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
+
+                    echo "Version: 0.1.${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
                 }
             }
         }
@@ -32,7 +37,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Building Docker image..."
-                    docker build -t kijanikiosk:${BUILD_NUMBER}-${GIT_COMMIT:0:7} -f app/Dockerfile .
+                    docker build -t kijanikiosk:${IMAGE_TAG} -f app/Dockerfile .
                 '''
             }
         }
@@ -61,8 +66,8 @@ pipeline {
                     echo "Stopping old container if exists..."
                     docker rm -f ${CONTAINER_NAME} || true
 
-                    echo "Starting new container..."
-                    docker run -d --name ${CONTAINER_NAME} -p ${PORT}:80 kijanikiosk:${BUILD_NUMBER}-${GIT_COMMIT:0:7}
+                    echo "Starting container..."
+                    docker run -d --name ${CONTAINER_NAME} -p ${PORT}:80 kijanikiosk:${IMAGE_TAG}
                 '''
             }
         }
@@ -73,8 +78,8 @@ pipeline {
                     echo "Waiting for container..."
                     sleep 5
 
-                    echo "Checking app health..."
-                    curl -I http://localhost:${PORT} || echo "Health check failed but continuing"
+                    echo "Checking application..."
+                    curl -I http://localhost:${PORT} || echo "Health check failed (non-blocking)"
                 '''
             }
         }
@@ -83,7 +88,7 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p artifacts
-                    echo "${BUILD_NUMBER}-${GIT_COMMIT:0:7}" > artifacts/version.txt
+                    echo "${IMAGE_TAG}" > artifacts/version.txt
                 '''
                 archiveArtifacts artifacts: 'artifacts/**'
             }
@@ -100,11 +105,11 @@ pipeline {
                         )]) {
                             sh '''
                                 echo "Pushing to Nexus..."
-                                echo "NOTE: configure Nexus URL if required"
+                                echo "Configure Nexus push logic here if needed"
                             '''
                         }
                     } catch (Exception e) {
-                        echo "Nexus not configured - skipping push stage"
+                        echo "Skipping Nexus push (credentials not configured)"
                     }
                 }
             }
