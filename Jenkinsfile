@@ -14,6 +14,12 @@ pipeline {
             }
         }
 
+        stage('Lint') {
+            steps {
+                sh 'echo "Lint stage: placeholder for code quality checks"'
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
@@ -24,6 +30,21 @@ pipeline {
 
                     sh "docker build -t ${imageTag} -f app/Dockerfile ."
                     sh "docker tag ${imageTag} ${IMAGE_NAME}:latest"
+                }
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                script {
+                    parallel(
+                        Test: {
+                            sh 'echo "Running unit tests (simulated)"'
+                        },
+                        'Security Audit': {
+                            sh 'echo "Running security audit (simulated)"'
+                        }
+                    )
                 }
             }
         }
@@ -60,9 +81,15 @@ pipeline {
     }
 
     post {
+        always {
+            echo "Cleaning workspace..."
+            cleanWs()
+        }
+
         success {
             echo "Pipeline completed successfully 🎉"
         }
+
         failure {
             echo "Pipeline failed ❌ Check logs"
         }
