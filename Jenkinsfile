@@ -1,27 +1,30 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'node:18-alpine'
+            args '-u root:root -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     environment {
-        APP_NAME = "kijanikiosk"
-        DOCKER_REPO = "localhost:8082/kijanikiosk-docker"
-        IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT?.take(7)}"
-        FULL_IMAGE = "${DOCKER_REPO}/${APP_NAME}"
+        IMAGE_NAME = "kijanikiosk"
+        NEXUS_URL = "http://172.17.0.1:8082"
+        NEXUS_REPO = "kijanikiosk-docker"
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
     }
 
     stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         stage('Init') {
             steps {
                 script {
                     env.GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.BUILD_VERSION = "0.1.0-${env.GIT_SHA}"
-                    echo "Build version: ${env.BUILD_VERSION}"
+                    env.VERSION = "0.1.0-${env.GIT_SHA}"
+                    echo "Build version: ${env.VERSION}"
                 }
             }
         }
@@ -36,65 +39,70 @@ pipeline {
             steps {
                 script {
                     sh """
-                        docker build -t ${APP_NAME}:${env.BUILD_VERSION} -f app/Dockerfile .
-                        
-                        docker tag ${APP_NAME}:${env.BUILD_VERSION} ${FULL_IMAGE}:${env.BUILD_VERSION}
-                        docker tag ${APP_NAME}:${env.BUILD_VERSION} ${FULL_IMAGE}:latest
+                        docker build -t ${IMAGE_NAME}:${VERSION} -f app/Dockerfile .
+                        docker tag ${IMAGE_NAME}:${VERSION} ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${VERSION}
+                        docker tag ${IMAGE_NAME}:${VERSION} ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
                     """
                 }
             }
         }
 
         stage('Verify') {
-            steps {
-                sh '''
-                    echo "Running unit tests (simulated)"
-                    echo "Running security audit (simulated)"
-                '''
+            parallel {
+
+                stage('Test') {
+                    steps {
+                        sh 'echo "Running unit tests (simulated)"'
+                    }
+                }
+
+                stage('Security Audit') {
+                    steps {
+                        sh 'echo "Running security audit (simulated)"'
+                    }
+                }
             }
         }
 
         stage('Run Container') {
             steps {
-                script {
-                    sh """
-                        echo "Removing old container if it exists..."
-                        docker rm -f ${APP_NAME}-app || true
-
-                        echo "Starting container..."
-                        docker run -d --name ${APP_NAME}-app -p 3000:80 ${APP_NAME}:${BUILD_VERSION}
-                    """
-                }
+                sh """
+                    docker rm -f kijanikiosk-app || true
+                    docker run -d --name kijanikiosk-app -p 3000:80 ${IMAGE_NAME}:${VERSION}
+                """
             }
         }
 
         stage('Health Check') {
             steps {
-                script {
-                    sh """
-                        echo "Waiting for container..."
-                        sleep 5
+                sh """
+                    sleep 5
+                    docker exec kijanikiosk-app curl -f http://localhost || exit 1
+                    echo "Application is healthy"
+                """
+            }
+        }
 
-                        docker exec ${APP_NAME}-app curl -f http://localhost
-
-                        echo "Application is healthy"
-                    """
-                }
+        stage('Archive') {
+            steps {
+                sh """
+                    mkdir -p artifacts
+                    echo "${VERSION}" > artifacts/version.txt
+                    docker save ${IMAGE_NAME}:${VERSION} -o artifacts/image.tar
+                """
+                archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
             }
         }
 
         stage('Push to Nexus') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    script {
-                        sh """
-                            echo "$PASS" | docker login ${DOCKER_REPO.split('/')[0]} -u $USER --password-stdin
+                    sh """
+                        echo \$PASS | docker login ${NEXUS_URL} -u \$USER --password-stdin
 
-                            echo "Pushing image to Nexus..."
-                            docker push ${FULL_IMAGE}:${BUILD_VERSION}
-                            docker push ${FULL_IMAGE}:latest
-                        """
-                    }
+                        docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${VERSION}
+                        docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
+                    """
                 }
             }
         }
@@ -108,10 +116,15 @@ pipeline {
 
         success {
             echo "Pipeline completed successfully ✅"
+            echo "Artifact version: ${VERSION}"
         }
 
         failure {
             echo "Pipeline failed ❌ Check logs"
+        }
+
+        changed {
+            echo "Pipeline status changed ⚠️"
         }
     }
 }
