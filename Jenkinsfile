@@ -5,7 +5,7 @@ pipeline {
         IMAGE_NAME = "kijanikiosk"
         VERSION = "0.1.0"
         NEXUS_URL = "http://nexus:8081"
-        NEXUS_REPO = "kijanikiosk-releases"
+        NEXUS_REPO = "kijanikiosk-repo"
         GIT_SHA = ""
     }
 
