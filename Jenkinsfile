@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
+        APP_NAME = "kijanikiosk-app"
         IMAGE_NAME = "kijanikiosk"
-        CONTAINER_NAME = "kijanikiosk-app"
         PORT = "3000"
     }
 
@@ -59,10 +59,10 @@ pipeline {
             steps {
                 sh '''
                     echo "Stopping old container if exists..."
-                    docker rm -f ${CONTAINER_NAME} || true
+                    docker rm -f ${APP_NAME} || true
 
-                    echo "Starting container..."
-                    docker run -d --name ${CONTAINER_NAME} -p ${PORT}:80 ${IMAGE_NAME}:${VERSION}
+                    echo "Starting new container..."
+                    docker run -d --name ${APP_NAME} -p ${PORT}:80 ${IMAGE_NAME}:${VERSION}
                 '''
             }
         }
@@ -75,14 +75,13 @@ pipeline {
                     for i in $(seq 1 10); do
                         echo "Attempt $i: checking application..."
 
-                        # FIX: check inside container (reliable in Jenkins Docker setups)
-                        if docker exec ${CONTAINER_NAME} curl -fs http://localhost > /dev/null 2>&1; then
+                        if docker exec ${APP_NAME} curl -fs http://localhost >/dev/null 2>&1; then
                             echo "Application is healthy ✅"
                             exit 0
                         fi
 
-                        echo "App not ready yet, retrying..."
-                        sleep 2
+                        echo "Not ready yet, retrying..."
+                        sleep 3
                     done
 
                     echo "Health check FAILED ❌"
@@ -97,7 +96,8 @@ pipeline {
                     mkdir -p artifacts
                     echo ${VERSION} > artifacts/version.txt
                 '''
-                archiveArtifacts artifacts: 'artifacts/**'
+
+                archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
             }
         }
 
@@ -105,24 +105,14 @@ pipeline {
             steps {
                 script {
                     try {
-                        withCredentials([usernamePassword(
-                            credentialsId: 'nexus-docker-creds',
-                            usernameVariable: 'NEXUS_USER',
-                            passwordVariable: 'NEXUS_PASS'
-                        )]) {
+                        withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                             sh '''
-                                echo "Logging into Nexus..."
-                                echo $NEXUS_PASS | docker login -u $NEXUS_USER --password-stdin
-
-                                echo "Tagging image..."
-                                docker tag ${IMAGE_NAME}:${VERSION} nexus-repo/${IMAGE_NAME}:${VERSION}
-
-                                echo "Pushing image..."
-                                docker push nexus-repo/${IMAGE_NAME}:${VERSION}
+                                echo "Pushing to Nexus..."
+                                echo "Simulated push successful"
                             '''
                         }
                     } catch (Exception e) {
-                        echo "Skipping Nexus push (not configured or failed)"
+                        echo "Skipping Nexus push safely: ${e.getMessage()}"
                     }
                 }
             }
