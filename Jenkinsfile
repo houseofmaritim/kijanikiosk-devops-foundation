@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'node:18-alpine'
-            args '-u root:root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
 
     environment {
         IMAGE_NAME = "kijanikiosk"
@@ -37,13 +32,11 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    sh """
-                        docker build -t ${IMAGE_NAME}:${VERSION} -f app/Dockerfile .
-                        docker tag ${IMAGE_NAME}:${VERSION} ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${VERSION}
-                        docker tag ${IMAGE_NAME}:${VERSION} ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
-                    """
-                }
+                sh """
+                    docker build -t ${IMAGE_NAME}:${VERSION} -f app/Dockerfile .
+                    docker tag ${IMAGE_NAME}:${VERSION} ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${VERSION}
+                    docker tag ${IMAGE_NAME}:${VERSION} ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
+                """
             }
         }
 
@@ -99,7 +92,6 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh """
                         echo \$PASS | docker login ${NEXUS_URL} -u \$USER --password-stdin
-
                         docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:${VERSION}
                         docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
                     """
