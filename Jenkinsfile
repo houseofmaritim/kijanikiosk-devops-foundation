@@ -75,11 +75,15 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                    echo "Waiting for container..."
-                    sleep 5
+                    echo "Waiting for container to be ready..."
 
-                    echo "Checking application..."
-                    curl -I http://localhost:${PORT} || echo "Health check failed (non-blocking)"
+                    for i in {1..10}; do
+                        echo "Attempt $i: checking application..."
+                        curl -I http://localhost:${PORT} && break
+
+                        echo "App not ready yet, retrying..."
+                        sleep 2
+                    done
                 '''
             }
         }
@@ -105,11 +109,11 @@ pipeline {
                         )]) {
                             sh '''
                                 echo "Pushing to Nexus..."
-                                echo "Configure Nexus push logic here if needed"
+                                echo "Nexus integration placeholder (not blocking build)"
                             '''
                         }
                     } catch (Exception e) {
-                        echo "Skipping Nexus push (credentials not configured)"
+                        echo "Skipping Nexus push (not configured)"
                     }
                 }
             }
