@@ -4,6 +4,9 @@ pipeline {
     environment {
         APP_NAME = "kijani-app"
         IMAGE_NAME = "kijanikiosk"
+        VERSION = "0.1.0"
+        NEXUS_URL = "http://192.168.0.136:8081"
+        NEXUS_REPO = "kijanikiosk-releases"
     }
 
     stages {
@@ -24,8 +27,9 @@ pipeline {
             steps {
                 script {
                     def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    def imageTag = "${IMAGE_NAME}:${commit}"
+                    env.GIT_SHA = commit
 
+                    def imageTag = "${IMAGE_NAME}:${VERSION}-${commit}"
                     env.IMAGE_TAG = imageTag
 
                     sh "docker build -t ${imageTag} -f app/Dockerfile ."
@@ -76,6 +80,32 @@ pipeline {
                     echo "Health check failed"
                     exit 1
                 """
+            }
+        }
+
+        stage('Publish to Nexus') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+
+                        sh """
+                            echo "Creating npm config"
+                            echo "registry=${NEXUS_URL}/repository/${NEXUS_REPO}/" > .npmrc
+                            echo "username=${NEXUS_USER}" >> .npmrc
+                            echo "password=${NEXUS_PASS}" >> .npmrc
+
+                            echo "Packaging artifact"
+                            tar -czf ${IMAGE_NAME}-${GIT_SHA}.tar.gz app/
+
+                            echo "Uploading to Nexus (simulated upload step)"
+                            curl -u $NEXUS_USER:$NEXUS_PASS \
+                                --upload-file ${IMAGE_NAME}-${GIT_SHA}.tar.gz \
+                                ${NEXUS_URL}/repository/${NEXUS_REPO}/${IMAGE_NAME}-${VERSION}-${GIT_SHA}.tar.gz
+
+                            rm -f .npmrc
+                        """
+                    }
+                }
             }
         }
     }
