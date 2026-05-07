@@ -42,21 +42,23 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                sh """
-                echo "Waiting for application to start..."
+                script {
+                    sh """
+                    echo "Waiting for application to start..."
 
-                sleep 10
+                    sleep 10
 
-                for i in \$(seq 1 15)
-                do
-                    curl -f http://localhost:3000 && exit 0
-                    echo "Not ready yet... retrying in 3s"
-                    sleep 3
-                done
+                    for i in \$(seq 1 15)
+                    do
+                        curl -f http://localhost:3000 && exit 0
+                        echo "Not ready yet... retrying in 3s"
+                        sleep 3
+                    done
 
-                echo "Health check failed"
-                exit 1
-                """
+                    echo "Health check failed"
+                    exit 1
+                    """
+                }
             }
         }
     }
