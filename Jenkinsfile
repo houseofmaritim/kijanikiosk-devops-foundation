@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        APP_NAME = "kijani-app"
+        IMAGE_NAME = "kijanikiosk"
+    }
+
     stages {
 
         stage('Checkout') {
@@ -13,19 +18,13 @@ pipeline {
             steps {
                 script {
                     def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    def imageTag = "kijanikiosk:${commit}"
+                    def imageTag = "${IMAGE_NAME}:${commit}"
 
                     env.IMAGE_TAG = imageTag
 
                     sh "docker build -t ${imageTag} -f app/Dockerfile ."
-                    sh "docker tag ${imageTag} kijanikiosk:latest"
+                    sh "docker tag ${imageTag} ${IMAGE_NAME}:latest"
                 }
-            }
-        }
-
-        stage('List Docker Images') {
-            steps {
-                sh 'docker images | grep kijanikiosk || true'
             }
         }
 
@@ -33,8 +32,8 @@ pipeline {
             steps {
                 script {
                     sh """
-                    docker rm -f kijani-app || true
-                    docker run -d --name kijani-app -p 3000:80 ${env.IMAGE_TAG}
+                        docker rm -f ${APP_NAME} || true
+                        docker run -d --name ${APP_NAME} -p 3000:80 ${IMAGE_TAG}
                     """
                 }
             }
@@ -42,33 +41,30 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                script {
-                    sh """
-                    echo "Waiting for application to start..."
-
-                    sleep 10
+                sh """
+                    echo "Waiting for container to be ready..."
+                    sleep 5
 
                     for i in \$(seq 1 15)
                     do
-                        curl -f http://localhost:3000 && exit 0
+                        docker exec ${APP_NAME} curl -f http://localhost && exit 0
                         echo "Not ready yet... retrying in 3s"
                         sleep 3
                     done
 
                     echo "Health check failed"
                     exit 1
-                    """
-                }
+                """
             }
         }
     }
 
     post {
         success {
-            echo 'Pipeline completed successfully 🎉'
+            echo "Pipeline completed successfully 🎉"
         }
         failure {
-            echo 'Pipeline failed ❌ Check logs'
+            echo "Pipeline failed ❌ Check logs"
         }
     }
 }
