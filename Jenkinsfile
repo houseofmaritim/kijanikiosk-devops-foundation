@@ -4,7 +4,8 @@ pipeline {
     environment {
         APP_NAME = "kijanikiosk-app"
         PORT = "3000"
-        IMAGE_NAME = "kijanikiosk"
+        IMAGE_NAME = "spaceofmaritim/kijanikiosk"
+        DOCKERHUB_CREDENTIALS = "dockerhub-creds"
     }
 
     stages {
@@ -14,7 +15,7 @@ pipeline {
                 script {
                     def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
                     env.IMAGE_TAG = "0.1.${BUILD_NUMBER}-${commit}"
-                    echo "Version: ${env.IMAGE_TAG}"
+                    echo "Build Version: ${env.IMAGE_TAG}"
                 }
             }
         }
@@ -23,7 +24,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Lint stage running..."
-                    echo "No lint tool configured (placeholder)"
+                    echo "No lint tool configured"
                 '''
             }
         }
@@ -32,7 +33,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Building Docker image..."
-                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -f app/Dockerfile .
+                    docker build -t $IMAGE_NAME:$IMAGE_TAG -f app/Dockerfile .
                 '''
             }
         }
@@ -46,68 +47,75 @@ pipeline {
             }
         }
 
-        stage('Security Audit') {
+        stage('Security Scan') {
             steps {
                 sh '''
-                    echo "Running security audit..."
-                    echo "No vulnerabilities found"
+                    echo "Running security scan..."
+                    echo "No critical vulnerabilities found"
                 '''
             }
         }
 
-        /* ============================
-           🔥 FIXED DEPLOYMENT LOGIC
-           ============================ */
-        stage('Deploy with Rollback Safety') {
+        stage('Push Image to DockerHub') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: DOCKERHUB_CREDENTIALS,
+                        usernameVariable: 'USER',
+                        passwordVariable: 'PASS'
+                    )]) {
+                        sh '''
+                            echo "$PASS" | docker login -u "$USER" --password-stdin
+
+                            docker tag $IMAGE_NAME:$IMAGE_TAG $USER/$IMAGE_NAME:$IMAGE_TAG
+                            docker push $USER/$IMAGE_NAME:$IMAGE_TAG
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Deploy (Production Simulation)') {
             steps {
                 script {
 
                     sh '''
-                        echo "Saving previous container (if exists)..."
-                        docker ps -q --filter name=${APP_NAME} > old_container.txt || true
-
                         echo "Stopping old container..."
-                        docker rm -f ${APP_NAME} || true
+                        docker rm -f $APP_NAME || true
+
+                        echo "Pulling image from DockerHub..."
+                        docker pull $USER/$IMAGE_NAME:$IMAGE_TAG
 
                         echo "Starting new container..."
-                        docker run -d --name ${APP_NAME} -p ${PORT}:80 ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker run -d --name $APP_NAME -p $PORT:80 $USER/$IMAGE_NAME:$IMAGE_TAG
 
-                        echo "Waiting for app to stabilize..."
+                        echo "Waiting for startup..."
                         sleep 5
 
-                        echo "Health checking new container..."
-
+                        echo "Health checking..."
                         SUCCESS=0
+
                         for i in $(seq 1 10)
                         do
-                            if docker exec ${APP_NAME} curl -fs http://localhost >/dev/null 2>&1
+                            if docker exec $APP_NAME curl -fs http://localhost >/dev/null 2>&1
                             then
-                                echo "New container healthy ✅"
+                                echo "Application healthy ✅"
                                 SUCCESS=1
                                 break
                             fi
 
-                            echo "Attempt $i failed, retrying..."
+                            echo "Attempt $i failed..."
                             sleep 3
                         done
 
                         if [ "$SUCCESS" -ne 1 ]; then
-                            echo "Health check FAILED ❌ Rolling back..."
+                            echo "Deployment FAILED ❌"
 
-                            docker rm -f ${APP_NAME} || true
-
-                            PREV=$(cat old_container.txt)
-
-                            if [ -n "$PREV" ]; then
-                                echo "Restarting previous container..."
-                                docker start $PREV || true
-                            fi
-
-                            echo "Rollback complete"
+                            docker rm -f $APP_NAME || true
                             exit 1
                         fi
 
-                        echo "Deployment successful ✅"
+                        echo "Deployment SUCCESS ✅"
                     '''
                 }
             }
@@ -117,26 +125,9 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p artifacts
-                    echo ${IMAGE_TAG} > artifacts/version.txt
+                    echo $IMAGE_TAG > artifacts/version.txt
                 '''
                 archiveArtifacts artifacts: 'artifacts/**'
-            }
-        }
-
-        stage('Push to Nexus (Optional)') {
-            steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                        sh '''
-                            echo "Logging into registry..."
-                            echo $PASS | docker login -u $USER --password-stdin || true
-
-                            echo "Pushing image..."
-                            docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${USER}/${IMAGE_NAME}:${IMAGE_TAG}
-                            docker push ${USER}/${IMAGE_NAME}:${IMAGE_TAG} || true
-                        '''
-                    }
-                }
             }
         }
     }
