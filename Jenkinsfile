@@ -4,17 +4,19 @@ pipeline {
     environment {
         IMAGE_NAME = "kijanikiosk"
         VERSION = "0.1.0"
-        GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-
-        NEXUS_URL = "http://172.17.0.3:8081"
+        NEXUS_URL = "http://nexus:8081"
         NEXUS_REPO = "kijanikiosk-releases"
+        GIT_SHA = ""
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Init') {
             steps {
-                checkout scm
+                script {
+                    GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    echo "Build version: ${VERSION}-${GIT_SHA}"
+                }
             }
         }
 
@@ -54,20 +56,19 @@ pipeline {
         stage('Run Container') {
             steps {
                 script {
-
                     sh """
-                        echo "Cleaning old container (if exists)..."
-                        docker rm -f ${IMAGE_NAME}-app || true
+                        echo "Cleaning old container if exists..."
+                        docker rm -f kijanikiosk-app || true
 
-                        echo "Freeing port 3000 if used..."
-                        PID=\$(docker ps --filter publish=3000 -q)
-                        if [ ! -z "\$PID" ]; then
-                            docker stop \$PID || true
-                            docker rm -f \$PID || true
+                        echo "Checking port 3000..."
+                        if docker ps --format '{{.Ports}}' | grep 3000; then
+                            echo "Port 3000 in use - freeing..."
+                            docker ps --filter publish=3000 -q | xargs -r docker stop || true
+                            docker ps --filter publish=3000 -q | xargs -r docker rm -f || true
                         fi
 
-                        echo "Starting new container..."
-                        docker run -d --name ${IMAGE_NAME}-app -p 3000:80 ${IMAGE_NAME}:${VERSION}-${GIT_SHA}
+                        echo "Starting container..."
+                        docker run -d --name kijanikiosk-app -p 3000:80 ${IMAGE_NAME}:${VERSION}-${GIT_SHA}
                     """
                 }
             }
@@ -80,13 +81,13 @@ pipeline {
                         echo "Waiting for container..."
                         sleep 5
 
-                        for i in \$(seq 1 15); do
-                            if docker exec ${IMAGE_NAME}-app curl -f http://localhost; then
+                        for i in \$(seq 1 10); do
+                            if docker exec kijanikiosk-app curl -f http://localhost; then
                                 echo "App is healthy"
                                 exit 0
                             fi
                             echo "Retrying..."
-                            sleep 3
+                            sleep 2
                         done
 
                         echo "Health check failed"
@@ -99,22 +100,16 @@ pipeline {
         stage('Publish to Nexus') {
             steps {
                 script {
-
-                    def nexusIp = sh(
-                        script: "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' nexus",
-                        returnStdout: true
-                    ).trim()
-
                     withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
 
                         sh """
                             echo "Packaging artifact..."
-                            tar -czf ${IMAGE_NAME}-${GIT_SHA}.tar.gz app/
+                            tar -czf kijanikiosk-${GIT_SHA}.tar.gz app/
 
                             echo "Uploading to Nexus..."
                             curl -u ${NEXUS_USER}:${NEXUS_PASS} \
-                                --upload-file ${IMAGE_NAME}-${GIT_SHA}.tar.gz \
-                                http://${nexusIp}:8081/repository/${NEXUS_REPO}/${IMAGE_NAME}-${VERSION}-${GIT_SHA}.tar.gz
+                                --upload-file kijanikiosk-${GIT_SHA}.tar.gz \
+                                ${NEXUS_URL}/repository/${NEXUS_REPO}/kijanikiosk-${VERSION}-${GIT_SHA}.tar.gz
                         """
                     }
                 }
