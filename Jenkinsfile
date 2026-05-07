@@ -42,8 +42,8 @@ pipeline {
 
         stage('Verify') {
             steps {
-                sh 'echo Running unit tests (simulated)'
-                sh 'echo Running security audit (simulated)'
+                sh 'echo "Running unit tests (simulated)"'
+                sh 'echo "Running security audit (simulated)"'
             }
         }
 
@@ -51,8 +51,10 @@ pipeline {
             steps {
                 script {
                     sh """
+                    echo "Removing old container if it exists..."
                     docker rm -f kijanikiosk-app || true
 
+                    echo "Starting container..."
                     docker run -d --name kijanikiosk-app -p 3000:80 \
                         ${IMAGE_NAME}:0.1.0-${env.GIT_SHA}
                     """
@@ -64,9 +66,12 @@ pipeline {
             steps {
                 script {
                     sh """
+                    echo "Waiting for container..."
                     sleep 5
+
                     docker exec kijanikiosk-app curl -f http://localhost || exit 1
-                    echo App is healthy
+
+                    echo "Application is healthy"
                     """
                 }
             }
@@ -78,6 +83,7 @@ pipeline {
                     sh """
                     echo "$PASS" | docker login ${NEXUS_URL} -u "$USER" --password-stdin
 
+                    echo "Pushing image to Nexus..."
                     docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${env.GIT_SHA}
                     docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
                     """
@@ -88,14 +94,14 @@ pipeline {
 
     post {
         always {
-            echo 'Cleaning workspace...'
+            echo "Cleaning workspace..."
             cleanWs()
         }
         success {
-            echo 'Pipeline completed successfully ✅'
+            echo "Pipeline completed successfully ✅"
         }
         failure {
-            echo 'Pipeline failed ❌ Check logs'
+            echo "Pipeline failed ❌ Check logs"
         }
     }
 }
