@@ -1,12 +1,12 @@
 pipeline {
+
     agent any
 
     environment {
-        APP_NAME = "kijani-app"
-        IMAGE_NAME = "kijanikiosk"
-        VERSION = "0.1.0"
+        IMAGE_NAME = 'kijanikiosk'
+        VERSION = '0.1.0'
         NEXUS_URL = 'http://nexus:8081'
-        NEXUS_REPO = "kijanikiosk-releases"
+        NEXUS_REPO = 'kijanikiosk-releases'
     }
 
     stages {
@@ -19,35 +19,49 @@ pipeline {
 
         stage('Lint') {
             steps {
-                sh 'echo "Lint stage: placeholder for code quality checks"'
+                sh '''
+                    echo "Lint stage: placeholder for code quality checks"
+                '''
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.GIT_SHA = commit
 
-                    def imageTag = "${IMAGE_NAME}:${VERSION}-${commit}"
-                    env.IMAGE_TAG = imageTag
+                    env.GIT_SHA = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
 
-                    sh "docker build -t ${imageTag} -f app/Dockerfile ."
-                    sh "docker tag ${imageTag} ${IMAGE_NAME}:latest"
+                    sh '''
+                        docker build -t ${IMAGE_NAME}:${VERSION}-${GIT_SHA} -f app/Dockerfile .
+
+                        docker tag ${IMAGE_NAME}:${VERSION}-${GIT_SHA} ${IMAGE_NAME}:latest
+                    '''
                 }
             }
         }
 
         stage('Verify') {
             steps {
+
                 script {
+
                     parallel(
-                        Test: {
-                            sh 'echo "Running unit tests (simulated)"'
+
+                        "Test": {
+                            sh '''
+                                echo "Running unit tests (simulated)"
+                            '''
                         },
-                        'Security Audit': {
-                            sh 'echo "Running security audit (simulated)"'
+
+                        "Security Audit": {
+                            sh '''
+                                echo "Running security audit (simulated)"
+                            '''
                         }
+
                     )
                 }
             }
@@ -55,55 +69,84 @@ pipeline {
 
         stage('Run Container') {
             steps {
+
                 script {
-                    sh """
-                        docker rm -f ${APP_NAME} || true
-                        docker run -d --name ${APP_NAME} -p 3000:80 ${IMAGE_TAG}
-                    """
+
+                    sh '''
+                        docker rm -f kijani-app || true
+
+                        docker run -d \
+                            --name kijani-app \
+                            -p 3000:80 \
+                            ${IMAGE_NAME}:${VERSION}-${GIT_SHA}
+                    '''
                 }
             }
         }
 
         stage('Health Check') {
             steps {
-                sh """
+
+                sh '''
                     echo "Waiting for container to be ready..."
+
                     sleep 5
 
-                    for i in \$(seq 1 15)
+                    for i in $(seq 1 15)
                     do
-                        docker exec ${APP_NAME} curl -f http://localhost && exit 0
+                        if docker exec kijani-app curl -f http://localhost
+                        then
+                            exit 0
+                        fi
+
                         echo "Not ready yet... retrying in 3s"
+
                         sleep 3
                     done
 
                     echo "Health check failed"
+
                     exit 1
-                """
+                '''
             }
         }
 
         stage('Publish to Nexus') {
             steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
 
-                        sh """
+                script {
+
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'nexus-creds',
+                            usernameVariable: 'NEXUS_USER',
+                            passwordVariable: 'NEXUS_PASS'
+                        )
+                    ]) {
+
+                        sh '''
                             echo "Creating npm config"
-                            echo "registry=${NEXUS_URL}/repository/${NEXUS_REPO}/" > .npmrc
-                            echo "username=${NEXUS_USER}" >> .npmrc
-                            echo "password=${NEXUS_PASS}" >> .npmrc
+
+                            echo "registry=$NEXUS_URL/repository/$NEXUS_REPO/" > .npmrc
+                            echo "username=$NEXUS_USER" >> .npmrc
+                            echo "password=$NEXUS_PASS" >> .npmrc
 
                             echo "Packaging artifact"
+
                             tar -czf ${IMAGE_NAME}-${GIT_SHA}.tar.gz app/
 
-                            echo "Uploading to Nexus (simulated upload step)"
-                            curl -u $NEXUS_USER:$NEXUS_PASS \
+                            echo "Testing Nexus connectivity"
+
+                            curl -v http://nexus:8081
+
+                            echo "Uploading artifact to Nexus"
+
+                            curl -v -u $NEXUS_USER:$NEXUS_PASS \
                                 --upload-file ${IMAGE_NAME}-${GIT_SHA}.tar.gz \
-                                ${NEXUS_URL}/repository/${NEXUS_REPO}/${IMAGE_NAME}-${VERSION}-${GIT_SHA}.tar.gz
+                                $NEXUS_URL/repository/$NEXUS_REPO/${IMAGE_NAME}-${VERSION}-${GIT_SHA}.tar.gz
 
                             rm -f .npmrc
-                        """
+                        '''
                     }
                 }
             }
@@ -111,8 +154,10 @@ pipeline {
     }
 
     post {
+
         always {
             echo "Cleaning workspace..."
+
             cleanWs()
         }
 
