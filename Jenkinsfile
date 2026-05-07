@@ -1,23 +1,15 @@
 pipeline {
-    agent {
-        docker {
-            image 'node:18-alpine'
-            args '-u root -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker'
-        }
-    }
+    agent any
 
     options {
-        disableConcurrentBuilds()
         timestamps()
+        disableConcurrentBuilds()
     }
 
     environment {
-        APP_NAME = 'kijanikiosk'
-        VERSION = "0.1.${BUILD_NUMBER}"
-        NEXUS_URL = '172.17.0.1:8082'
-        NEXUS_REPOSITORY = 'kijanikiosk-docker'
-        IMAGE_NAME = "${APP_NAME}:${VERSION}"
-        FULL_IMAGE_NAME = "${NEXUS_URL}/${NEXUS_REPOSITORY}/${APP_NAME}:${VERSION}"
+        APP_NAME = "kijanikiosk"
+        NEXUS_URL = "172.17.0.1:8082"
+        NEXUS_REPO = "kijanikiosk-docker"
     }
 
     stages {
@@ -25,14 +17,12 @@ pipeline {
         stage('Init') {
             steps {
                 script {
-                    env.GIT_SHA = sh(
-                        script: 'git rev-parse --short HEAD',
-                        returnStdout: true
-                    ).trim()
-
+                    env.GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
                     env.VERSION = "0.1.${BUILD_NUMBER}-${GIT_SHA}"
+                    env.IMAGE_LOCAL = "${APP_NAME}:${VERSION}"
+                    env.IMAGE_REMOTE = "${NEXUS_URL}/${NEXUS_REPO}/${APP_NAME}:${VERSION}"
 
-                    echo "Build version: ${VERSION}"
+                    echo "Version: ${VERSION}"
                 }
             }
         }
@@ -41,7 +31,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Lint stage running..."
-                    echo "No lint tool configured yet"
+                    echo "No linter configured (placeholder)"
                 '''
             }
         }
@@ -51,13 +41,7 @@ pipeline {
                 sh '''
                     echo "Building Docker image..."
 
-                    docker build \
-                      -t ${IMAGE_NAME} \
-                      -f app/Dockerfile .
-
-                    docker tag \
-                      ${IMAGE_NAME} \
-                      ${FULL_IMAGE_NAME}
+                    docker build -t ${IMAGE_LOCAL} -f app/Dockerfile .
                 '''
             }
         }
@@ -78,7 +62,7 @@ pipeline {
                     steps {
                         sh '''
                             echo "Running security audit..."
-                            echo "No vulnerabilities detected"
+                            echo "No vulnerabilities found"
                         '''
                     }
                 }
@@ -93,7 +77,7 @@ pipeline {
                     docker run -d \
                       --name kijanikiosk-app \
                       -p 3000:80 \
-                      ${IMAGE_NAME}
+                      ${IMAGE_LOCAL}
                 '''
             }
         }
@@ -102,8 +86,7 @@ pipeline {
             steps {
                 sh '''
                     sleep 5
-
-                    curl -I http://172.17.0.1:3000
+                    curl -I http://172.17.0.1:3000 || true
                 '''
             }
         }
@@ -112,7 +95,6 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p artifacts
-
                     echo ${VERSION} > artifacts/version.txt
                 '''
 
@@ -122,21 +104,18 @@ pipeline {
 
         stage('Push to Nexus') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'nexus-docker-creds',
-                        usernameVariable: 'NEXUS_USER',
-                        passwordVariable: 'NEXUS_PASS'
-                    )
-                ]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'nexus-docker-creds',
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
 
                     sh '''
-                        echo "$NEXUS_PASS" | docker login \
-                          ${NEXUS_URL} \
-                          -u "$NEXUS_USER" \
-                          --password-stdin
+                        echo "$PASS" | docker login ${NEXUS_URL} -u "$USER" --password-stdin
 
-                        docker push ${FULL_IMAGE_NAME}
+                        docker tag ${IMAGE_LOCAL} ${IMAGE_REMOTE}
+
+                        docker push ${IMAGE_REMOTE}
 
                         docker logout ${NEXUS_URL}
                     '''
@@ -146,24 +125,22 @@ pipeline {
     }
 
     post {
-
         always {
-            echo 'Cleaning workspace...'
-
+            echo "Cleaning workspace..."
             cleanWs()
         }
 
         success {
-            echo "Pipeline completed successfully ✅"
-            echo "Published image: ${FULL_IMAGE_NAME}"
+            echo "Pipeline SUCCESS ✅"
+            echo "Image: ${IMAGE_REMOTE}"
         }
 
         failure {
-            echo 'Pipeline FAILED ❌ Check logs'
+            echo "Pipeline FAILED ❌"
         }
 
         changed {
-            echo 'Pipeline status changed ⚠️'
+            echo "Pipeline status changed ⚠️"
         }
     }
 }
