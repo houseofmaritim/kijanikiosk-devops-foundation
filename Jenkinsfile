@@ -74,8 +74,9 @@ pipeline {
 
                     for i in $(seq 1 10); do
                         echo "Attempt $i: checking application..."
-                        
-                        if curl -fs http://localhost:${PORT} > /dev/null; then
+
+                        # FIX: check inside container (reliable in Jenkins Docker setups)
+                        if docker exec ${CONTAINER_NAME} curl -fs http://localhost > /dev/null 2>&1; then
                             echo "Application is healthy ✅"
                             exit 0
                         fi
