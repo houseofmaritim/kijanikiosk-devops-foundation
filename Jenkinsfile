@@ -3,8 +3,9 @@ pipeline {
 
     environment {
         APP_NAME = "kijanikiosk-app"
-        IMAGE_NAME = "kijanikiosk"
         PORT = "3000"
+        IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
+        IMAGE_NAME = "kijanikiosk:${IMAGE_TAG}"
     }
 
     stages {
@@ -12,9 +13,8 @@ pipeline {
         stage('Init') {
             steps {
                 script {
-                    def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.VERSION = "0.1.${BUILD_NUMBER}-${commit}"
-                    echo "Version: ${env.VERSION}"
+                    env.GIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    echo "Version: ${BUILD_NUMBER}-${GIT_SHORT}"
                 }
             }
         }
@@ -32,7 +32,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Building Docker image..."
-                    docker build -t ${IMAGE_NAME}:${VERSION} -f app/Dockerfile .
+                    docker build -t $IMAGE_NAME -f app/Dockerfile .
                 '''
             }
         }
@@ -59,10 +59,10 @@ pipeline {
             steps {
                 sh '''
                     echo "Stopping old container if exists..."
-                    docker rm -f ${APP_NAME} || true
+                    docker rm -f $APP_NAME || true
 
-                    echo "Starting new container..."
-                    docker run -d --name ${APP_NAME} -p ${PORT}:80 ${IMAGE_NAME}:${VERSION}
+                    echo "Starting container..."
+                    docker run -d --name $APP_NAME -p $PORT:80 $IMAGE_NAME
                 '''
             }
         }
@@ -72,16 +72,18 @@ pipeline {
                 sh '''
                     echo "Waiting for container to be ready..."
 
-                    for i in $(seq 1 10); do
+                    for i in $(seq 1 10)
+                    do
                         echo "Attempt $i: checking application..."
 
-                        if docker exec ${APP_NAME} curl -fs http://localhost >/dev/null 2>&1; then
+                        if docker exec $APP_NAME curl -fs http://localhost >/dev/null 2>&1
+                        then
                             echo "Application is healthy ✅"
                             exit 0
+                        else
+                            echo "App not ready yet..."
+                            sleep 3
                         fi
-
-                        echo "Not ready yet, retrying..."
-                        sleep 3
                     done
 
                     echo "Health check FAILED ❌"
@@ -94,10 +96,9 @@ pipeline {
             steps {
                 sh '''
                     mkdir -p artifacts
-                    echo ${VERSION} > artifacts/version.txt
+                    echo $IMAGE_TAG > artifacts/version.txt
                 '''
-
-                archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
+                archiveArtifacts artifacts: 'artifacts/**'
             }
         }
 
@@ -112,7 +113,7 @@ pipeline {
                             '''
                         }
                     } catch (Exception e) {
-                        echo "Skipping Nexus push safely: ${e.getMessage()}"
+                        echo "Skipping Nexus push (not configured or failed)"
                     }
                 }
             }
@@ -124,11 +125,9 @@ pipeline {
             echo "Cleaning workspace..."
             cleanWs()
         }
-
         success {
             echo "Pipeline SUCCESS ✅"
         }
-
         failure {
             echo "Pipeline FAILED ❌"
         }
