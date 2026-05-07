@@ -5,7 +5,7 @@ pipeline {
         APP_NAME = "kijani-app"
         IMAGE_NAME = "kijanikiosk"
         VERSION = "0.1.0"
-        NEXUS_URL = "http://192.168.0.136:8081"
+        NEXUS_URL = 'http://nexus:8081'
         NEXUS_REPO = "kijanikiosk-releases"
     }
 
