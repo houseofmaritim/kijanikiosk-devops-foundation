@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = "kijanikiosk"
         VERSION = "0.1.0"
-        NEXUS_URL = "http://172.17.0.3:8081"
+        NEXUS_URL = "http://172.17.0.1:8081"
         NEXUS_REPO = "kijanikiosk-releases"
     }
 
@@ -18,17 +18,16 @@ pipeline {
 
         stage('Lint') {
             steps {
-                sh 'echo "Lint stage: placeholder for code quality checks"'
+                sh '''
+                    echo "Lint stage: placeholder for code quality checks"
+                '''
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    env.GIT_SHA = sh(
-                        script: 'git rev-parse --short HEAD',
-                        returnStdout: true
-                    ).trim()
+                    env.GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
 
                     sh """
                         docker build -t ${IMAGE_NAME}:${VERSION}-${GIT_SHA} -f app/Dockerfile .
@@ -39,33 +38,31 @@ pipeline {
         }
 
         stage('Verify') {
-            steps {
-                script {
-                    parallel(
-                        "Test": {
-                            sh 'echo "Running unit tests (simulated)"'
-                        },
+            parallel {
+                stage('Test') {
+                    steps {
+                        sh '''
+                            echo "Running unit tests (simulated)"
+                        '''
+                    }
+                }
 
-                        "Security Audit": {
-                            sh 'echo "Running security audit (simulated)"'
-                        }
-                    )
+                stage('Security Audit') {
+                    steps {
+                        sh '''
+                            echo "Running security audit (simulated)"
+                        '''
+                    }
                 }
             }
         }
 
         stage('Run Container') {
             steps {
-                script {
-                    sh """
-                        docker rm -f kijani-app || true
-
-                        docker run -d \
-                            --name kijani-app \
-                            -p 3000:80 \
-                            ${IMAGE_NAME}:${VERSION}-${GIT_SHA}
-                    """
-                }
+                sh """
+                    docker rm -f kijani-app || true
+                    docker run -d --name kijani-app -p 3000:80 ${IMAGE_NAME}:${VERSION}-${GIT_SHA}
+                """
             }
         }
 
@@ -76,8 +73,8 @@ pipeline {
                     sleep 5
 
                     for i in \$(seq 1 15); do
-
-                        if docker exec kijani-app curl -f http://localhost; then
+                        if docker exec kijani-app curl -f http://localhost > /dev/null 2>&1; then
+                            echo "Application is healthy"
                             exit 0
                         fi
 
@@ -94,33 +91,26 @@ pipeline {
         stage('Publish to Nexus') {
             steps {
                 script {
-
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'nexus-creds',
-                            usernameVariable: 'NEXUS_USER',
-                            passwordVariable: 'NEXUS_PASS'
-                        )
-                    ]) {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'nexus-creds',
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )]) {
 
                         sh """
                             echo "Creating npm config"
-
                             echo "registry=${NEXUS_URL}/repository/${NEXUS_REPO}/" > .npmrc
                             echo "username=${NEXUS_USER}" >> .npmrc
                             echo "password=${NEXUS_PASS}" >> .npmrc
 
                             echo "Packaging artifact"
-
                             tar -czf ${IMAGE_NAME}-${GIT_SHA}.tar.gz app/
 
                             echo "Testing Nexus connectivity"
+                            curl -v ${NEXUS_URL} || echo "Nexus not reachable but continuing"
 
-                            curl -v ${NEXUS_URL}
-
-                            echo "Uploading artifact to Nexus"
-
-                            curl -u \$NEXUS_USER:\$NEXUS_PASS \
+                            echo "Uploading artifact"
+                            curl -u ${NEXUS_USER}:${NEXUS_PASS} \
                                 --upload-file ${IMAGE_NAME}-${GIT_SHA}.tar.gz \
                                 ${NEXUS_URL}/repository/${NEXUS_REPO}/${IMAGE_NAME}-${VERSION}-${GIT_SHA}.tar.gz
 
@@ -133,7 +123,6 @@ pipeline {
     }
 
     post {
-
         always {
             echo "Cleaning workspace..."
             cleanWs()
