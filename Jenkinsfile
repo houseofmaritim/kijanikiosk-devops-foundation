@@ -2,25 +2,33 @@ pipeline {
     agent any
 
     environment {
-        NEXUS_URL = "localhost:8082"
-        NEXUS_REPO = "kijanikiosk-docker"
-        IMAGE_NAME = "kijanikiosk"
+        APP_NAME = "kijanikiosk"
+        DOCKER_REPO = "localhost:8082/kijanikiosk-docker"
+        IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT?.take(7)}"
+        FULL_IMAGE = "${DOCKER_REPO}/${APP_NAME}"
     }
 
     stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
 
         stage('Init') {
             steps {
                 script {
                     env.GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    echo "Build version: 0.1.0-${env.GIT_SHA}"
+                    env.BUILD_VERSION = "0.1.0-${env.GIT_SHA}"
+                    echo "Build version: ${env.BUILD_VERSION}"
                 }
             }
         }
 
         stage('Lint') {
             steps {
-                sh 'echo Lint stage: placeholder'
+                sh 'echo "Lint stage: placeholder"'
             }
         }
 
@@ -28,13 +36,10 @@ pipeline {
             steps {
                 script {
                     sh """
-                    docker build -t ${IMAGE_NAME}:0.1.0-${env.GIT_SHA} -f app/Dockerfile .
-
-                    docker tag ${IMAGE_NAME}:0.1.0-${env.GIT_SHA} \
-                        ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${env.GIT_SHA}
-
-                    docker tag ${IMAGE_NAME}:0.1.0-${env.GIT_SHA} \
-                        ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
+                        docker build -t ${APP_NAME}:${env.BUILD_VERSION} -f app/Dockerfile .
+                        
+                        docker tag ${APP_NAME}:${env.BUILD_VERSION} ${FULL_IMAGE}:${env.BUILD_VERSION}
+                        docker tag ${APP_NAME}:${env.BUILD_VERSION} ${FULL_IMAGE}:latest
                     """
                 }
             }
@@ -42,8 +47,10 @@ pipeline {
 
         stage('Verify') {
             steps {
-                sh 'echo "Running unit tests (simulated)"'
-                sh 'echo "Running security audit (simulated)"'
+                sh '''
+                    echo "Running unit tests (simulated)"
+                    echo "Running security audit (simulated)"
+                '''
             }
         }
 
@@ -51,12 +58,11 @@ pipeline {
             steps {
                 script {
                     sh """
-                    echo "Removing old container if it exists..."
-                    docker rm -f kijanikiosk-app || true
+                        echo "Removing old container if it exists..."
+                        docker rm -f ${APP_NAME}-app || true
 
-                    echo "Starting container..."
-                    docker run -d --name kijanikiosk-app -p 3000:80 \
-                        ${IMAGE_NAME}:0.1.0-${env.GIT_SHA}
+                        echo "Starting container..."
+                        docker run -d --name ${APP_NAME}-app -p 3000:80 ${APP_NAME}:${BUILD_VERSION}
                     """
                 }
             }
@@ -66,12 +72,12 @@ pipeline {
             steps {
                 script {
                     sh """
-                    echo "Waiting for container..."
-                    sleep 5
+                        echo "Waiting for container..."
+                        sleep 5
 
-                    docker exec kijanikiosk-app curl -f http://localhost || exit 1
+                        docker exec ${APP_NAME}-app curl -f http://localhost
 
-                    echo "Application is healthy"
+                        echo "Application is healthy"
                     """
                 }
             }
@@ -80,13 +86,15 @@ pipeline {
         stage('Push to Nexus') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh """
-                    echo "$PASS" | docker login ${NEXUS_URL} -u "$USER" --password-stdin
+                    script {
+                        sh """
+                            echo "$PASS" | docker login ${DOCKER_REPO.split('/')[0]} -u $USER --password-stdin
 
-                    echo "Pushing image to Nexus..."
-                    docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:0.1.0-${env.GIT_SHA}
-                    docker push ${NEXUS_URL}/${NEXUS_REPO}/${IMAGE_NAME}:latest
-                    """
+                            echo "Pushing image to Nexus..."
+                            docker push ${FULL_IMAGE}:${BUILD_VERSION}
+                            docker push ${FULL_IMAGE}:latest
+                        """
+                    }
                 }
             }
         }
@@ -97,9 +105,11 @@ pipeline {
             echo "Cleaning workspace..."
             cleanWs()
         }
+
         success {
             echo "Pipeline completed successfully ✅"
         }
+
         failure {
             echo "Pipeline failed ❌ Check logs"
         }
