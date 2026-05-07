@@ -5,8 +5,8 @@ pipeline {
         IMAGE_NAME = "kijanikiosk"
         VERSION = "0.1.0"
         GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-        NEXUS_CONTAINER = "nexus"
-        NEXUS_PORT = "8081"
+
+        NEXUS_URL = "http://172.17.0.3:8081"
         NEXUS_REPO = "kijanikiosk-releases"
     }
 
@@ -55,8 +55,8 @@ pipeline {
             steps {
                 script {
                     sh """
-                        docker rm -f kijani-app || true
-                        docker run -d --name kijani-app -p 3000:80 ${IMAGE_NAME}:${VERSION}-${GIT_SHA}
+                        docker rm -f ${IMAGE_NAME}-app || true
+                        docker run -d --name ${IMAGE_NAME}-app -p 3000:80 ${IMAGE_NAME}:${VERSION}-${GIT_SHA}
                     """
                 }
             }
@@ -66,11 +66,11 @@ pipeline {
             steps {
                 script {
                     sh """
-                        echo "Waiting for container to be ready..."
+                        echo "Waiting for container..."
                         sleep 5
 
                         for i in \$(seq 1 15); do
-                            if docker exec kijani-app curl -f http://localhost; then
+                            if docker exec ${IMAGE_NAME}-app curl -f http://localhost; then
                                 echo "App is healthy"
                                 exit 0
                             fi
@@ -89,8 +89,9 @@ pipeline {
             steps {
                 script {
 
-                    def nexusIP = sh(
-                        script: "docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' nexus",
+                    // Get Nexus container IP safely
+                    def nexusIp = sh(
+                        script: "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' nexus",
                         returnStdout: true
                     ).trim()
 
@@ -100,12 +101,12 @@ pipeline {
                             echo "Packaging artifact..."
                             tar -czf ${IMAGE_NAME}-${GIT_SHA}.tar.gz app/
 
-                            echo "Uploading artifact to Nexus..."
+                            echo "Uploading artifact to Nexus at ${nexusIp}"
+
                             curl -u ${NEXUS_USER}:${NEXUS_PASS} \
                                 --upload-file ${IMAGE_NAME}-${GIT_SHA}.tar.gz \
-                                http://${nexusIP}:8081/repository/${NEXUS_REPO}/${IMAGE_NAME}-${VERSION}-${GIT_SHA}.tar.gz
+                                http://${nexusIp}:8081/repository/${NEXUS_REPO}/${IMAGE_NAME}-${VERSION}-${GIT_SHA}.tar.gz
                         """
-
                     }
                 }
             }
