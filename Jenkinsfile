@@ -68,7 +68,7 @@ pipeline {
 
                     // switch
                     sh """
-                        sh 'echo ' + inactive + ' > kijani_active' 
+                        writeFile file: 'kijani_active', text: "${inactive}" 
                         docker exec kijanikiosk-nginx nginx -s reload || true
                         docker exec kijanikiosk-nginx nginx -s reload
                     """
