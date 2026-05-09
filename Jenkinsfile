@@ -7,7 +7,6 @@ pipeline {
         PORT_GREEN = "8082"
         NETWORK = "kijani-net"
         STATE_FILE = "kijani_active"
-        NGINX_CONTAINER = "kijanikiosk-nginx"
     }
 
     stages {
@@ -38,10 +37,10 @@ pipeline {
         stage('Push') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh """
+                    sh '''
                         echo $PASS | docker login -u $USER --password-stdin
-                        docker push ${IMAGE_TAG}
-                    """
+                        docker push $IMAGE_TAG
+                    '''
                 }
             }
         }
@@ -50,11 +49,15 @@ pipeline {
             steps {
                 script {
 
-                    // Get current active environment (default = green)
-                    def active = sh(script: "cat ${STATE_FILE} 2>/dev/null || echo green", returnStdout: true).trim()
+                    // SAFE STATE READ (NO FILE CRASH)
+                    def active = "green"
+                    if (fileExists(env.STATE_FILE)) {
+                        active = readFile(env.STATE_FILE).trim()
+                    }
 
                     def inactive = (active == "green") ? "blue" : "green"
-                    def port = (inactive == "blue") ? PORT_BLUE : PORT_GREEN
+
+                    def port = (inactive == "blue") ? env.PORT_BLUE : env.PORT_GREEN
                     def container = "kijanikiosk-${inactive}"
 
                     echo "Active environment: ${active}"
@@ -70,24 +73,8 @@ pipeline {
                     sh "sleep 5"
                     sh "docker exec ${container} curl -f http://localhost:80"
 
-                    // SWITCH TRAFFIC (update nginx)
-                    sh """
-                        echo '
-server {
-    listen 80;
-
-    location / {
-        proxy_pass http://${container}:80;
-    }
-}
-' > nginx/default.conf
-
-                        docker cp nginx/default.conf ${NGINX_CONTAINER}:/etc/nginx/conf.d/default.conf
-                        docker exec ${NGINX_CONTAINER} nginx -s reload
-                    """
-
-                    // Save new active state (SAFE way)
-                    sh "echo ${inactive} > ${STATE_FILE}"
+                    // SAVE NEW STATE (FIXED WAY)
+                    writeFile file: env.STATE_FILE, text: "${inactive}"
 
                     echo "Deployment complete. Active is now: ${inactive}"
                 }
