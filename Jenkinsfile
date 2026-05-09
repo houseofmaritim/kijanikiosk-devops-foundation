@@ -69,7 +69,7 @@ pipeline {
                     // switch
                     sh """
                         echo '${inactive}' > /tmp/kijani_active
-                        sed -i 's/${active}/${inactive}/' upstream.conf || true
+                        sed -i 's/${active}/${inactive}/' nginx-config/conf.d/upstream.conf
                         docker exec kijanikiosk-nginx nginx -s reload
                     """
 
