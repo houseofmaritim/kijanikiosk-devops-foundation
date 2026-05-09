@@ -6,6 +6,8 @@ pipeline {
         PORT_BLUE = "8081"
         PORT_GREEN = "8082"
         NETWORK = "kijani-net"
+        STATE_FILE = "kijani_active"
+        NGINX_CONTAINER = "kijanikiosk-nginx"
     }
 
     stages {
@@ -37,7 +39,7 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh """
-                        echo \$PASS | docker login -u \$USER --password-stdin
+                        echo $PASS | docker login -u $USER --password-stdin
                         docker push ${IMAGE_TAG}
                     """
                 }
@@ -48,42 +50,46 @@ pipeline {
             steps {
                 script {
 
-                    // SAFE READ OF STATE (no crash if file missing)
-                    def active = fileExists('kijani_active')
-                        ? readFile('kijani_active').trim()
-                        : 'green'
+                    // Get current active environment (default = green)
+                    def active = sh(script: "cat ${STATE_FILE} 2>/dev/null || echo green", returnStdout: true).trim()
 
                     def inactive = (active == "green") ? "blue" : "green"
                     def port = (inactive == "blue") ? PORT_BLUE : PORT_GREEN
                     def container = "kijanikiosk-${inactive}"
 
-                    echo "Active: ${active}"
+                    echo "Active environment: ${active}"
                     echo "Deploying to: ${inactive}"
 
-                    // Deploy new container
+                    // Deploy new version
                     sh """
                         docker rm -f ${container} || true
                         docker run -d --name ${container} --network ${NETWORK} -p ${port}:80 ${IMAGE_TAG}
                     """
 
-                    // Health check (critical safety gate)
-                    def health = sh(
-                        script: "sleep 5 && docker exec ${container} curl -f http://localhost:80",
-                        returnStatus: true
-                    )
+                    // Health check
+                    sh "sleep 5"
+                    sh "docker exec ${container} curl -f http://localhost:80"
 
-                    if (health != 0) {
-                        echo "❌ Health check failed — rolling back"
+                    // SWITCH TRAFFIC (update nginx)
+                    sh """
+                        echo '
+server {
+    listen 80;
 
-                        sh "docker rm -f ${container} || true"
+    location / {
+        proxy_pass http://${container}:80;
+    }
+}
+' > nginx/default.conf
 
-                        error("Deployment aborted due to failed health check")
-                    }
+                        docker cp nginx/default.conf ${NGINX_CONTAINER}:/etc/nginx/conf.d/default.conf
+                        docker exec ${NGINX_CONTAINER} nginx -s reload
+                    """
 
-                    // Switch traffic ONLY after success
-                    writeFile file: 'kijani_active', text: inactive
+                    // Save new active state (SAFE way)
+                    sh "echo ${inactive} > ${STATE_FILE}"
 
-                    echo "✅ Deployment successful. Active: ${inactive}"
+                    echo "Deployment complete. Active is now: ${inactive}"
                 }
             }
         }
