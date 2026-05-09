@@ -49,21 +49,21 @@ pipeline {
             steps {
                 script {
 
-                    // SAFE STATE READ (NO FILE CRASH)
+                    // SAFE STATE READ (no pipeline failure if file missing)
                     def active = "green"
-                    if (fileExists(env.STATE_FILE)) {
-                        active = readFile(env.STATE_FILE).trim()
+                    if (fileExists('kijani_active')) {
+                        active = readFile('kijani_active').trim()
                     }
 
                     def inactive = (active == "green") ? "blue" : "green"
 
-                    def port = (inactive == "blue") ? env.PORT_BLUE : env.PORT_GREEN
+                    def port = (inactive == "blue") ? PORT_BLUE : PORT_GREEN
                     def container = "kijanikiosk-${inactive}"
 
                     echo "Active environment: ${active}"
                     echo "Deploying to: ${inactive}"
 
-                    // Deploy new version
+                    // DEPLOY NEW VERSION
                     sh """
                         docker rm -f ${container} || true
                         docker run -d --name ${container} --network ${NETWORK} -p ${port}:80 ${IMAGE_TAG}
@@ -73,8 +73,8 @@ pipeline {
                     sh "sleep 5"
                     sh "docker exec ${container} curl -f http://localhost:80"
 
-                    // SAVE NEW STATE (FIXED WAY)
-                    writeFile file: env.STATE_FILE, text: "${inactive}"
+                    // UPDATE STATE (THIS IS THE CORRECT WAY)
+                    writeFile file: 'kijani_active', text: "${inactive}"
 
                     echo "Deployment complete. Active is now: ${inactive}"
                 }
