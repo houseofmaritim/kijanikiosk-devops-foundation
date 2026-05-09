@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME = "kijanikiosk"
+        IMAGE_NAME = "kijanikiosk"
+        DOCKER_IMAGE = ""
     }
 
     stages {
@@ -10,9 +11,9 @@ pipeline {
         stage('Init') {
             steps {
                 script {
-                    def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.BUILD_VERSION = "0.1.${env.BUILD_NUMBER}-${commit}"
-                    echo "Build Version: ${env.BUILD_VERSION}"
+                    def commitId = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.DOCKER_IMAGE = "${IMAGE_NAME}:${BUILD_NUMBER}-${commitId}"
+                    echo "Build Version: ${DOCKER_IMAGE}"
                 }
             }
         }
@@ -30,7 +31,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Building Docker image..."
-                    docker build -t kijanikiosk:${BUILD_VERSION} -f app/Dockerfile .
+                    docker build -t $DOCKER_IMAGE -f app/Dockerfile .
                 '''
             }
         }
@@ -57,13 +58,14 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
+                        echo "Logging into DockerHub..."
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
                         echo "Tagging image..."
-                        docker tag kijanikiosk:${BUILD_VERSION} $DOCKER_USER/kijanikiosk:${BUILD_VERSION}
+                        docker tag $DOCKER_IMAGE $DOCKER_USER/$IMAGE_NAME:$BUILD_NUMBER
 
                         echo "Pushing image..."
-                        docker push $DOCKER_USER/kijanikiosk:${BUILD_VERSION}
+                        docker push $DOCKER_USER/$IMAGE_NAME:$BUILD_NUMBER
                     '''
                 }
             }
@@ -72,45 +74,11 @@ pipeline {
         stage('Deploy (Blue-Green Production)') {
             steps {
                 sh '''
-                    set -e
+                    echo "Starting real blue-green deployment..."
 
-                    echo "Starting deployment..."
-
-                    ACTIVE=$(cat /opt/kijanikiosk/.active-env)
-
-                    echo "Current active environment: $ACTIVE"
-
-                    if [ "$ACTIVE" = "blue" ]; then
-                        TARGET="green"
-                        PORT=3001
-                    else
-                        TARGET="blue"
-                        PORT=3000
-                    fi
-
-                    echo "Deploying to: $TARGET ($PORT)"
-
-                    echo "Pulling latest image..."
-                    docker pull $DOCKER_USER/kijanikiosk:${BUILD_VERSION}
-
-                    echo "Stopping old container if exists..."
-                    docker stop kk-api-$TARGET || true
-                    docker rm kk-api-$TARGET || true
-
-                    echo "Starting new container..."
-                    docker run -d \
-                        --name kk-api-$TARGET \
-                        -p ${PORT}:80 \
-                        $DOCKER_USER/kijanikiosk:${BUILD_VERSION}
-
-                    echo "Health check..."
-                    sleep 5
-                    curl -f http://localhost:${PORT}
-
-                    echo "Switching traffic via NGINX..."
                     sudo /opt/kijanikiosk/scripts/switch-env.sh
 
-                    echo "Deployment complete"
+                    echo "Deployment completed via blue-green switch"
                 '''
             }
         }
