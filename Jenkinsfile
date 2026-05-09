@@ -4,10 +4,10 @@ pipeline {
     environment {
         APP_NAME = "kijanikiosk"
         DOCKER_IMAGE = "spaceofmaritim/kijanikiosk"
-        REGISTRY = "docker.io"
-        BLUE_PORT = "8081"
-        GREEN_PORT = "8082"
-        ACTIVE_FILE = "/tmp/kijanikiosk_active_env"
+        REGISTRY_CREDENTIALS = "dockerhub-creds"
+        BLUE_CONTAINER = "kijanikiosk-blue"
+        GREEN_CONTAINER = "kijanikiosk-green"
+        ACTIVE_CONTAINER_FILE = "/tmp/kijanikiosk_active_env"
     }
 
     stages {
@@ -16,7 +16,7 @@ pipeline {
             steps {
                 script {
                     def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.BUILD_VERSION = "0.1.${BUILD_NUMBER}-${commit}"
+                    env.BUILD_VERSION = "0.1.${env.BUILD_NUMBER}-${commit}"
 
                     echo "======================================"
                     echo "Build Version: ${env.BUILD_VERSION}"
@@ -28,10 +28,7 @@ pipeline {
 
         stage('Lint') {
             steps {
-                sh '''
-                    echo "Lint stage running..."
-                    echo "No lint tool configured"
-                '''
+                sh 'echo "Lint stage running... (no lint configured)"'
             }
         }
 
@@ -46,68 +43,76 @@ pipeline {
 
         stage('Test') {
             steps {
-                sh '''
-                    echo "Running tests..."
-                    echo "Tests passed"
-                '''
+                sh 'echo "Running tests..."; echo "Tests passed"'
             }
         }
 
         stage('Security Scan') {
             steps {
-                sh '''
-                    echo "Running security scan..."
-                    echo "No critical vulnerabilities found"
-                '''
+                sh 'echo "Running security scan..."; echo "No critical vulnerabilities found"'
             }
         }
 
         stage('Push Image to DockerHub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh """
-                        echo "Logging into DockerHub..."
+                withCredentials([usernamePassword(credentialsId: REGISTRY_CREDENTIALS,
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS')]) {
+
+                    sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
                         echo "Pushing image..."
                         docker push ${DOCKER_IMAGE}:${BUILD_VERSION}
-                    """
+                    '''
                 }
             }
         }
 
         stage('Deploy (Blue-Green Local Safe Mode)') {
             steps {
-                sh """
-                    echo "Starting Blue-Green deployment (local mode)..."
+                script {
 
-                    CURRENT=\$(cat ${ACTIVE_FILE} 2>/dev/null || echo "blue")
+                    echo "Starting BLUE-GREEN deployment (local Docker switch)..."
 
-                    if [ "\$CURRENT" = "blue" ]; then
-                        NEW="green"
-                        PORT=${GREEN_PORT}
-                    else
-                        NEW="blue"
-                        PORT=${BLUE_PORT}
-                    fi
+                    // Determine current active environment
+                    def active = sh(
+                        script: """
+                            if [ -f ${ACTIVE_CONTAINER_FILE} ]; then cat ${ACTIVE_CONTAINER_FILE}; else echo blue; fi
+                        """,
+                        returnStdout: true
+                    ).trim()
 
-                    echo "Deploying ${NEW} on port \$PORT"
+                    echo "Current active environment: ${active}"
 
-                    docker stop kijanikiosk-\$NEW || true
-                    docker rm kijanikiosk-\$NEW || true
+                    def newEnv = (active == "blue") ? "green" : "blue"
+                    def containerName = (newEnv == "blue") ? BLUE_CONTAINER : GREEN_CONTAINER
 
-                    docker run -d \
-                        --name kijanikiosk-\$NEW \
-                        -p \$PORT:80 \
-                        ${DOCKER_IMAGE}:${BUILD_VERSION}
+                    echo "Deploying NEW environment: ${newEnv}"
 
-                    echo "\$NEW" > ${ACTIVE_FILE}
+                    // Stop old container (if exists)
+                    sh """
+                        docker stop ${containerName} || true
+                        docker rm ${containerName} || true
+                    """
 
-                    echo "Switched active environment to: \$NEW"
-                """
+                    // Run new container
+                    sh """
+                        docker run -d \
+                            --name ${containerName} \
+                            -p ${newEnv == "blue" ? "8081" : "8082"}:80 \
+                            ${DOCKER_IMAGE}:${BUILD_VERSION}
+                    """
+
+                    // Switch traffic (simulated)
+                    sh """
+                        echo ${newEnv} > ${ACTIVE_CONTAINER_FILE}
+                    """
+
+                    echo "Deployment complete. Active environment is now: ${newEnv}"
+                }
             }
         }
-
     }
 
     post {
