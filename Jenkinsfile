@@ -4,7 +4,6 @@ pipeline {
     environment {
         APP_NAME = "kijanikiosk"
         DOCKER_IMAGE = "spaceofmaritim/kijanikiosk"
-        VERSION = "0.1.${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
     }
 
     stages {
@@ -15,7 +14,11 @@ pipeline {
                     env.GIT_COMMIT = sh(script: "git rev-parse HEAD", returnStdout: true).trim()
                     env.SHORT_COMMIT = env.GIT_COMMIT.take(7)
                     env.VERSION = "0.1.${BUILD_NUMBER}-${SHORT_COMMIT}"
+
+                    echo "======================================"
                     echo "Build Version: ${env.VERSION}"
+                    echo "Commit: ${env.GIT_COMMIT}"
+                    echo "======================================"
                 }
             }
         }
@@ -58,7 +61,11 @@ pipeline {
 
         stage('Push Image to DockerHub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
                     sh '''
                         echo "Logging into DockerHub..."
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
@@ -76,10 +83,14 @@ pipeline {
         stage('Deploy (Blue-Green Production)') {
             steps {
                 sh '''
-                    echo "Deploying Blue-Green strategy..."
-                    ssh deploy@server "
-                        sudo /opt/kijanikiosk/scripts/switch-env.sh
-                    "
+                    echo "Starting Blue-Green deployment locally..."
+
+                    if [ ! -f /opt/kijanikiosk/scripts/switch-env.sh ]; then
+                        echo "ERROR: switch-env.sh not found!"
+                        exit 1
+                    fi
+
+                    sudo /opt/kijanikiosk/scripts/switch-env.sh
                 '''
             }
         }
