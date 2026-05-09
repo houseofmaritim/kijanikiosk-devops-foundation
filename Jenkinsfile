@@ -48,7 +48,7 @@ pipeline {
             steps {
                 script {
 
-                    def active = sh(script: "cat /tmp/kijani_active || echo green", returnStdout: true).trim()
+                    def active = sh(script: "cat kijani_active || echo green", returnStdout: true).trim()
                     def inactive = (active == "green") ? "blue" : "green"
 
                     def port = (inactive == "blue") ? PORT_BLUE : PORT_GREEN
@@ -68,8 +68,8 @@ pipeline {
 
                     // switch
                     sh """
-                        echo '${inactive}' > /tmp/kijani_active
-                        sed -i 's/${active}/${inactive}/' nginx-config/conf.d/upstream.conf
+                        sh 'echo ' + inactive + ' > kijani_active' 
+                        docker exec kijanikiosk-nginx nginx -s reload || true
                         docker exec kijanikiosk-nginx nginx -s reload
                     """
 
