@@ -3,11 +3,8 @@ pipeline {
 
     environment {
         APP_NAME = "kijanikiosk"
-        DOCKER_IMAGE = "spaceofmaritim/kijanikiosk"
-        REGISTRY_CREDENTIALS = "dockerhub-creds"
-        BLUE_CONTAINER = "kijanikiosk-blue"
-        GREEN_CONTAINER = "kijanikiosk-green"
-        ACTIVE_CONTAINER_FILE = "/tmp/kijanikiosk_active_env"
+        IMAGE_REPO = "spaceofmaritim/kijanikiosk"
+        ACTIVE_ENV_FILE = "/tmp/kijanikiosk_active_env"
     }
 
     stages {
@@ -16,7 +13,7 @@ pipeline {
             steps {
                 script {
                     def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.BUILD_VERSION = "0.1.${env.BUILD_NUMBER}-${commit}"
+                    env.BUILD_VERSION = "0.1.${BUILD_NUMBER}-${commit}"
 
                     echo "======================================"
                     echo "Build Version: ${env.BUILD_VERSION}"
@@ -36,34 +33,42 @@ pipeline {
             steps {
                 sh """
                     echo "Building Docker image..."
-                    docker build -t ${DOCKER_IMAGE}:${BUILD_VERSION} -f app/Dockerfile .
+                    docker build -t ${IMAGE_REPO}:${BUILD_VERSION} -f app/Dockerfile .
                 """
             }
         }
 
         stage('Test') {
             steps {
-                sh 'echo "Running tests..."; echo "Tests passed"'
+                sh """
+                    echo "Running tests..."
+                    echo "Tests passed"
+                """
             }
         }
 
         stage('Security Scan') {
             steps {
-                sh 'echo "Running security scan..."; echo "No critical vulnerabilities found"'
+                sh """
+                    echo "Running security scan..."
+                    echo "No critical vulnerabilities found"
+                """
             }
         }
 
         stage('Push Image to DockerHub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: REGISTRY_CREDENTIALS,
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
                     usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS')]) {
-
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
                     sh '''
+                        echo "Logging into DockerHub..."
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
                         echo "Pushing image..."
-                        docker push ${DOCKER_IMAGE}:${BUILD_VERSION}
+                        docker push ${IMAGE_REPO}:${BUILD_VERSION}
                     '''
                 }
             }
@@ -73,24 +78,22 @@ pipeline {
             steps {
                 script {
 
-                    echo "Starting BLUE-GREEN deployment (local Docker switch)..."
+                    echo "Starting BLUE-GREEN deployment..."
 
-                    // Determine current active environment
-                    def active = sh(
-                        script: """
-                            if [ -f ${ACTIVE_CONTAINER_FILE} ]; then cat ${ACTIVE_CONTAINER_FILE}; else echo blue; fi
-                        """,
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Current active environment: ${active}"
+                    def active = "blue"
+                    if (fileExists(env.ACTIVE_ENV_FILE)) {
+                        active = readFile(env.ACTIVE_ENV_FILE).trim()
+                    }
 
                     def newEnv = (active == "blue") ? "green" : "blue"
-                    def containerName = (newEnv == "blue") ? BLUE_CONTAINER : GREEN_CONTAINER
 
-                    echo "Deploying NEW environment: ${newEnv}"
+                    def containerName = "${APP_NAME}-${newEnv}"
+                    def port = (newEnv == "blue") ? "8081" : "8082"
 
-                    // Stop old container (if exists)
+                    echo "Active environment: ${active}"
+                    echo "Deploying new environment: ${newEnv}"
+
+                    // Stop + remove old container safely
                     sh """
                         docker stop ${containerName} || true
                         docker rm ${containerName} || true
@@ -99,17 +102,15 @@ pipeline {
                     // Run new container
                     sh """
                         docker run -d \
-                            --name ${containerName} \
-                            -p ${newEnv == "blue" ? "8081" : "8082"}:80 \
-                            ${DOCKER_IMAGE}:${BUILD_VERSION}
+                        --name ${containerName} \
+                        -p ${port}:80 \
+                        ${IMAGE_REPO}:${BUILD_VERSION}
                     """
 
-                    // Switch traffic (simulated)
-                    sh """
-                        echo ${newEnv} > ${ACTIVE_CONTAINER_FILE}
-                    """
+                    // Save state
+                    writeFile file: env.ACTIVE_ENV_FILE, text: newEnv
 
-                    echo "Deployment complete. Active environment is now: ${newEnv}"
+                    echo "Deployment successful → ACTIVE: ${newEnv}"
                 }
             }
         }
