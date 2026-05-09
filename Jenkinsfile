@@ -37,7 +37,7 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh """
-                        echo $PASS | docker login -u $USER --password-stdin
+                        echo \$PASS | docker login -u \$USER --password-stdin
                         docker push ${IMAGE_TAG}
                     """
                 }
@@ -48,32 +48,42 @@ pipeline {
             steps {
                 script {
 
-                    def active = sh(script: "cat kijani_active || echo green", returnStdout: true).trim()
-                    def inactive = (active == "green") ? "blue" : "green"
+                    // SAFE READ OF STATE (no crash if file missing)
+                    def active = fileExists('kijani_active')
+                        ? readFile('kijani_active').trim()
+                        : 'green'
 
+                    def inactive = (active == "green") ? "blue" : "green"
                     def port = (inactive == "blue") ? PORT_BLUE : PORT_GREEN
                     def container = "kijanikiosk-${inactive}"
 
                     echo "Active: ${active}"
                     echo "Deploying to: ${inactive}"
 
+                    // Deploy new container
                     sh """
                         docker rm -f ${container} || true
                         docker run -d --name ${container} --network ${NETWORK} -p ${port}:80 ${IMAGE_TAG}
                     """
 
-                    // health check
-                    sh "sleep 5"
-                    sh "docker exec ${container} curl -f http://localhost:80 || exit 1"
+                    // Health check (critical safety gate)
+                    def health = sh(
+                        script: "sleep 5 && docker exec ${container} curl -f http://localhost:80",
+                        returnStatus: true
+                    )
 
-                    // switch
-                    sh """
-                        writeFile file: 'kijani_active', text: "${inactive}" 
-                        docker exec kijanikiosk-nginx nginx -s reload || true
-                        docker exec kijanikiosk-nginx nginx -s reload
-                    """
+                    if (health != 0) {
+                        echo "❌ Health check failed — rolling back"
 
-                    echo "Deployment complete. Active: ${inactive}"
+                        sh "docker rm -f ${container} || true"
+
+                        error("Deployment aborted due to failed health check")
+                    }
+
+                    // Switch traffic ONLY after success
+                    writeFile file: 'kijani_active', text: inactive
+
+                    echo "✅ Deployment successful. Active: ${inactive}"
                 }
             }
         }
