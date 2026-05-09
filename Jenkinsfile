@@ -2,10 +2,9 @@ pipeline {
     agent any
 
     environment {
-        // FIX: define missing variable properly
-        DOCKER_IMAGE = "kijanikiosk"
-        DOCKERHUB_REPO = "houseofmaritim/kijanikiosk"
-        VERSION = "0.1.${BUILD_NUMBER}"
+        APP_NAME = "kijanikiosk"
+        DOCKER_IMAGE = "spaceofmaritim/kijanikiosk"
+        VERSION = "0.1.${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
     }
 
     stages {
@@ -13,9 +12,10 @@ pipeline {
         stage('Init') {
             steps {
                 script {
-                    env.GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.FULL_VERSION = "${VERSION}-${GIT_SHA}"
-                    echo "Build Version: ${FULL_VERSION}"
+                    env.GIT_COMMIT = sh(script: "git rev-parse HEAD", returnStdout: true).trim()
+                    env.SHORT_COMMIT = env.GIT_COMMIT.take(7)
+                    env.VERSION = "0.1.${BUILD_NUMBER}-${SHORT_COMMIT}"
+                    echo "Build Version: ${env.VERSION}"
                 }
             }
         }
@@ -33,7 +33,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Building Docker image..."
-                    docker build -t $DOCKER_IMAGE:$FULL_VERSION -f app/Dockerfile .
+                    docker build -t $DOCKER_IMAGE:$VERSION -f app/Dockerfile .
                 '''
             }
         }
@@ -58,19 +58,16 @@ pipeline {
 
         stage('Push Image to DockerHub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS')]) {
-
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
                         echo "Logging into DockerHub..."
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
 
                         echo "Tagging image..."
-                        docker tag $DOCKER_IMAGE:$FULL_VERSION $DOCKERHUB_REPO:$FULL_VERSION
+                        docker tag $DOCKER_IMAGE:$VERSION $DOCKER_IMAGE:$VERSION
 
                         echo "Pushing image..."
-                        docker push $DOCKERHUB_REPO:$FULL_VERSION
+                        docker push $DOCKER_IMAGE:$VERSION
                     '''
                 }
             }
@@ -79,15 +76,10 @@ pipeline {
         stage('Deploy (Blue-Green Production)') {
             steps {
                 sh '''
-                    set -e
-                    echo "Starting blue-green deployment..."
-
-                    # FIX: ensure file exists before reading
-                    if [ ! -f /opt/kijanikiosk/.active-env ]; then
-                        echo "blue" | sudo tee /opt/kijanikiosk/.active-env
-                    fi
-
-                    sudo /opt/kijanikiosk/scripts/switch-env.sh
+                    echo "Deploying Blue-Green strategy..."
+                    ssh deploy@server "
+                        sudo /opt/kijanikiosk/scripts/switch-env.sh
+                    "
                 '''
             }
         }
