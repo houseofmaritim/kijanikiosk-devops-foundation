@@ -4,6 +4,10 @@ pipeline {
     environment {
         APP_NAME = "kijanikiosk"
         DOCKER_IMAGE = "spaceofmaritim/kijanikiosk"
+        REGISTRY = "docker.io"
+        BLUE_PORT = "8081"
+        GREEN_PORT = "8082"
+        ACTIVE_FILE = "/tmp/kijanikiosk_active_env"
     }
 
     stages {
@@ -11,13 +15,12 @@ pipeline {
         stage('Init') {
             steps {
                 script {
-                    env.GIT_COMMIT = sh(script: "git rev-parse HEAD", returnStdout: true).trim()
-                    env.SHORT_COMMIT = env.GIT_COMMIT.take(7)
-                    env.VERSION = "0.1.${BUILD_NUMBER}-${SHORT_COMMIT}"
+                    def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.BUILD_VERSION = "0.1.${BUILD_NUMBER}-${commit}"
 
                     echo "======================================"
-                    echo "Build Version: ${env.VERSION}"
-                    echo "Commit: ${env.GIT_COMMIT}"
+                    echo "Build Version: ${env.BUILD_VERSION}"
+                    echo "Commit: ${commit}"
                     echo "======================================"
                 }
             }
@@ -34,10 +37,10 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh '''
+                sh """
                     echo "Building Docker image..."
-                    docker build -t $DOCKER_IMAGE:$VERSION -f app/Dockerfile .
-                '''
+                    docker build -t ${DOCKER_IMAGE}:${BUILD_VERSION} -f app/Dockerfile .
+                """
             }
         }
 
@@ -61,45 +64,50 @@ pipeline {
 
         stage('Push Image to DockerHub') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
                         echo "Logging into DockerHub..."
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-
-                        echo "Tagging image..."
-                        docker tag $DOCKER_IMAGE:$VERSION $DOCKER_IMAGE:$VERSION
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
                         echo "Pushing image..."
-                        docker push $DOCKER_IMAGE:$VERSION
-                    '''
+                        docker push ${DOCKER_IMAGE}:${BUILD_VERSION}
+                    """
                 }
             }
         }
 
-        stage('Deploy (Blue-Green Production)') {
+        stage('Deploy (Blue-Green Local Safe Mode)') {
             steps {
-                sh '''
-                    echo "Starting Blue-Green deployment locally..."
+                sh """
+                    echo "Starting Blue-Green deployment (local mode)..."
 
-                    if [ ! -f /opt/kijanikiosk/scripts/switch-env.sh ]; then
-                        echo "ERROR: switch-env.sh not found!"
-                        exit 1
+                    CURRENT=\$(cat ${ACTIVE_FILE} 2>/dev/null || echo "blue")
+
+                    if [ "\$CURRENT" = "blue" ]; then
+                        NEW="green"
+                        PORT=${GREEN_PORT}
+                    else
+                        NEW="blue"
+                        PORT=${BLUE_PORT}
                     fi
 
-                    sudo /opt/kijanikiosk/scripts/switch-env.sh
-                '''
+                    echo "Deploying ${NEW} on port \$PORT"
+
+                    docker stop kijanikiosk-\$NEW || true
+                    docker rm kijanikiosk-\$NEW || true
+
+                    docker run -d \
+                        --name kijanikiosk-\$NEW \
+                        -p \$PORT:80 \
+                        ${DOCKER_IMAGE}:${BUILD_VERSION}
+
+                    echo "\$NEW" > ${ACTIVE_FILE}
+
+                    echo "Switched active environment to: \$NEW"
+                """
             }
         }
 
-        stage('Archive') {
-            steps {
-                archiveArtifacts artifacts: '**', fingerprint: true
-            }
-        }
     }
 
     post {
