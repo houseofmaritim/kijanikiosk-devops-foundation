@@ -2,99 +2,88 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "kijanikiosk"
-        REGISTRY   = "docker.io"
+        IMAGE = "spaceofmaritim/kijanikiosk"
+        PORT_BLUE = "8081"
+        PORT_GREEN = "8082"
+        NETWORK = "kijani-net"
+        STATE_FILE = "kijani_active"
     }
 
     stages {
 
-        stage('Init') {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
             steps {
                 script {
-                    def commit = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.BUILD_VERSION = "0.1.${env.BUILD_NUMBER}-${commit}"
-                    echo "Build Version: ${env.BUILD_VERSION}"
+                    env.TAG = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.IMAGE_TAG = "${IMAGE}:${TAG}"
                 }
-            }
-        }
 
-        stage('Lint') {
-            steps {
-                sh '''
-                    echo "Lint stage running..."
-                    echo "No lint tool configured"
-                '''
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                sh '''
-                    echo "Building Docker image..."
-                    docker build -t ${IMAGE_NAME}:${BUILD_VERSION} -f app/Dockerfile .
-                '''
+                sh "docker build -t ${IMAGE_TAG} -f app/Dockerfile ."
             }
         }
 
         stage('Test') {
             steps {
-                sh '''
-                    echo "Running tests..."
-                    echo "Tests passed"
-                '''
+                sh "echo 'Running tests...'"
             }
         }
 
-        stage('Security Scan') {
+        stage('Push') {
             steps {
-                sh '''
-                    echo "Running security scan..."
-                    echo "No critical vulnerabilities found"
-                '''
-            }
-        }
-
-        stage('Push Image to DockerHub') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     sh '''
-                        echo "Logging into DockerHub..."
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-
-                        echo "Tagging image correctly..."
-                        docker tag ${IMAGE_NAME}:${BUILD_VERSION} ${DOCKER_USER}/${IMAGE_NAME}:${BUILD_VERSION}
-
-                        echo "Pushing image..."
-                        docker push ${DOCKER_USER}/${IMAGE_NAME}:${BUILD_VERSION}
+                        echo $PASS | docker login -u $USER --password-stdin
+                        docker push $IMAGE_TAG
                     '''
                 }
             }
         }
 
-        stage('Deploy (Production Simulation)') {
+        stage('Deploy Blue-Green') {
             steps {
-                sh '''
-                    echo "Deploying image (simulation)..."
-                    echo "Deployment successful"
-                '''
-            }
-        }
+                script {
 
-        stage('Archive') {
-            steps {
-                archiveArtifacts artifacts: '**/*', fingerprint: true
+                    // SAFE STATE READ (no pipeline failure if file missing)
+                    def active = "green"
+                    if (fileExists('kijani_active')) {
+                        active = readFile('kijani_active').trim()
+                    }
+
+                    def inactive = (active == "green") ? "blue" : "green"
+
+                    def port = (inactive == "blue") ? PORT_BLUE : PORT_GREEN
+                    def container = "kijanikiosk-${inactive}"
+
+                    echo "Active environment: ${active}"
+                    echo "Deploying to: ${inactive}"
+
+                    // DEPLOY NEW VERSION
+                    sh """
+                        docker rm -f ${container} || true
+                        docker run -d --name ${container} --network ${NETWORK} -p ${port}:80 ${IMAGE_TAG}
+                    """
+
+                    // Health check
+                    sh "sleep 5"
+                    sh "docker exec ${container} curl -f http://localhost:80"
+
+                    // UPDATE STATE (THIS IS THE CORRECT WAY)
+                    writeFile file: 'kijani_active', text: "${inactive}"
+
+                    echo "Deployment complete. Active is now: ${inactive}"
+                }
             }
         }
     }
 
     post {
         always {
-            echo "Cleaning workspace..."
             cleanWs()
         }
     }

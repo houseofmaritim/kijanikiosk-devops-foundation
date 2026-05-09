@@ -1,0 +1,10 @@
+MONITOR START: 23:47:37
+FAIL detected at 23:47:37 (count=1)
+T0 (fault observed): 23:47:37
+FAIL detected at 23:47:42 (count=2)
+FAIL detected at 23:47:47 (count=3)
+T1 (rollback triggered): 23:47:47
+ROLLBACK STARTED at 23:47:47
+Rollback completed at 23:47:47
+T2 (rollback complete): 23:47:47
+TOTAL DURATION: 10s
