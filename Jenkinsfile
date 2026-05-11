@@ -2,89 +2,39 @@ pipeline {
     agent any
 
     environment {
-        IMAGE = "spaceofmaritim/kijanikiosk"
-        PORT_BLUE = "8081"
-        PORT_GREEN = "8082"
-        NETWORK = "kijani-net"
-        STATE_FILE = "kijani_active"
+        IMAGE_NAME = "kk-payments"
+        NAMESPACE = "kk-payments"
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'feature/week8-container-delivery',
+                    url: 'https://github.com/houseofmaritim/kijanikiosk-devops-foundation.git'
             }
         }
 
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
-                script {
-                    env.TAG = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.IMAGE_TAG = "${IMAGE}:${TAG}"
-                }
-
-                sh "docker build -t ${IMAGE_TAG} -f app/Dockerfile ."
+                sh "docker build -t $IMAGE_NAME:${BUILD_NUMBER} -f Dockerfile.production ."
             }
         }
 
-        stage('Test') {
+        stage('Deploy to Kubernetes') {
             steps {
-                sh "echo 'Running tests...'"
+                sh """
+                kubectl set image deployment/$IMAGE_NAME \
+                $IMAGE_NAME=$IMAGE_NAME:${BUILD_NUMBER} \
+                -n $NAMESPACE
+                """
             }
         }
 
-        stage('Push') {
+        stage('Verify Deployment') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    sh '''
-                        echo $PASS | docker login -u $USER --password-stdin
-                        docker push $IMAGE_TAG
-                    '''
-                }
+                sh "kubectl rollout status deployment/$IMAGE_NAME -n $NAMESPACE"
             }
-        }
-
-        stage('Deploy Blue-Green') {
-            steps {
-                script {
-
-                    // SAFE STATE READ (no pipeline failure if file missing)
-                    def active = "green"
-                    if (fileExists('kijani_active')) {
-                        active = readFile('kijani_active').trim()
-                    }
-
-                    def inactive = (active == "green") ? "blue" : "green"
-
-                    def port = (inactive == "blue") ? PORT_BLUE : PORT_GREEN
-                    def container = "kijanikiosk-${inactive}"
-
-                    echo "Active environment: ${active}"
-                    echo "Deploying to: ${inactive}"
-
-                    // DEPLOY NEW VERSION
-                    sh """
-                        docker rm -f ${container} || true
-                        docker run -d --name ${container} --network ${NETWORK} -p ${port}:80 ${IMAGE_TAG}
-                    """
-
-                    // Health check
-                    sh "sleep 5"
-                    sh "docker exec ${container} curl -f http://localhost:80"
-
-                    // UPDATE STATE (THIS IS THE CORRECT WAY)
-                    writeFile file: 'kijani_active', text: "${inactive}"
-
-                    echo "Deployment complete. Active is now: ${inactive}"
-                }
-            }
-        }
-    }
-
-    post {
-        always {
-            cleanWs()
         }
     }
 }
