@@ -1,0 +1,14 @@
+FROM nginx:alpine
+
+RUN addgroup -S kijani && adduser -S kijani -G kijani
+
+RUN mkdir -p /var/cache/nginx \
+    /var/run \
+    /var/log/nginx \
+    && chown -R kijani:kijani /var/cache/nginx /var/run /var/log/nginx /usr/share/nginx/html
+
+RUN sed -i 's#/run/nginx.pid#/tmp/nginx.pid#' /etc/nginx/nginx.conf
+
+COPY app/index.html /usr/share/nginx/html/index.html
+
+USER kijani
