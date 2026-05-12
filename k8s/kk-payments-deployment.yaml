@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kk-payments
+  namespace: kijani-project
+  annotations: 
+    kubernetes.io/change-cause: "Deliberate regression: v9.9.9-bad does not exist"
+    
+spec:
+  replicas: 3
+  revisionHistoryLimit: 10
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+
+  selector:
+    matchLabels:
+      app: kk-payments
+
+  template:
+    metadata:
+      labels:
+        app: kk-payments
+
+    spec:
+      containers:
+      - name: kk-payments
+        image: kk-payments:v9.9.9-bad
+        imagePullPolicy: Never
+
+        ports:
+        - containerPort: 80
+
+        envFrom:
+        - configMapRef:
+            name: kk-payments-config
+        - secretRef:
+            name: kk-payments-secrets
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          failureThreshold: 3
+
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
