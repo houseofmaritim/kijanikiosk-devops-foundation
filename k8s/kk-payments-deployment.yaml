@@ -4,8 +4,8 @@ metadata:
   name: kk-payments
   namespace: kijani-project
   annotations: 
-    kubernetes.io/change-cause: "Deliberate regression: v9.9.9-bad does not exist"
-    
+    kubernetes.io/change-cause: "Rollback to stable v1.1.0"
+         
 spec:
   replicas: 3
   revisionHistoryLimit: 10
@@ -28,8 +28,8 @@ spec:
     spec:
       containers:
       - name: kk-payments
-        image: kk-payments:v9.9.9-bad
-        imagePullPolicy: Never
+        image: kk-payments:v1.1.0
+        imagePullPolicy: IfNotPresent
 
         ports:
         - containerPort: 80
@@ -63,4 +63,4 @@ spec:
 
           limits:
             cpu: "500m"
-            memory: "256Mi"
+            memory: "1Gi"

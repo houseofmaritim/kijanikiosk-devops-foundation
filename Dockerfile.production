@@ -1,17 +1,12 @@
 FROM nginx:alpine
 
-RUN addgroup -S kijani && adduser -S kijani -G kijani
-
-# FIX ALL REQUIRED NGINX PATHS (THIS IS THE KEY PART YOU MISSED)
+# allow nginx runtime dirs
 RUN mkdir -p /var/cache/nginx \
-    /var/run \
-    /var/log/nginx \
-    && chown -R kijani:kijani /var/cache/nginx /var/run /var/log/nginx /usr/share/nginx/html
+    && mkdir -p /var/run \
+    && mkdir -p /var/log/nginx \
+    && chown -R nginx:nginx /var/cache/nginx /var/run /var/log/nginx
 
-# Fix nginx PID path issue
-RUN touch /run/nginx.pid \
-    && chown -R kijani:kijani /run
-
+# copy app
 COPY app/index.html /usr/share/nginx/html/index.html
 
-USER kijani
+# switch to nginx user (safe default)
