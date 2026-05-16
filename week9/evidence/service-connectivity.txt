@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KijaniKiosk CI/CD</title>
+</head>
+<body>
+    <h1>DevOps Pipeline is Working 🚀</h1>
+</body>
+</html>
+pod "connectivity-test" deleted from kijani-project namespace

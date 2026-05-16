@@ -1,0 +1,15 @@
+Server:		10.96.0.10
+Address:	10.96.0.10:53
+
+** server can't find kk-payments.cluster.local: NXDOMAIN
+
+** server can't find kk-payments.cluster.local: NXDOMAIN
+
+** server can't find kk-payments.svc.cluster.local: NXDOMAIN
+
+Name:	kk-payments.kijani-project.svc.cluster.local
+Address: 10.99.70.216
+
+** server can't find kk-payments.svc.cluster.local: NXDOMAIN
+
+
