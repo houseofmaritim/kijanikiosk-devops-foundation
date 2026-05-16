@@ -1,0 +1,30 @@
+NAME                               READY   STATUS    RESTARTS      AGE
+pod/kk-api-85cd5ff494-qxcb8        1/1     Running   5 (16h ago)   4d15h
+pod/kk-api-85cd5ff494-v4gvj        1/1     Running   5 (16h ago)   4d15h
+pod/kk-payments-7bf954578b-7nvb4   1/1     Running   0             5h50m
+pod/kk-payments-7bf954578b-rk9cm   1/1     Running   0             5h50m
+pod/kk-payments-7bf954578b-tdgqm   1/1     Running   0             5h50m
+
+NAME                  TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+service/kk-api        ClusterIP   10.97.90.178   <none>        8080/TCP   4d15h
+service/kk-payments   ClusterIP   10.99.70.216   <none>        80/TCP     4d15h
+
+NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/kk-api        2/2     2            2           4d15h
+deployment.apps/kk-payments   3/3     3            3           14h
+
+NAME                                     DESIRED   CURRENT   READY   AGE
+replicaset.apps/kk-api-85cd5ff494        2         2         2       4d15h
+replicaset.apps/kk-payments-54d6cc7896   0         0         0       8h
+replicaset.apps/kk-payments-556c454c8b   0         0         0       13h
+replicaset.apps/kk-payments-59d4668b4    0         0         0       13h
+replicaset.apps/kk-payments-6758f6db5b   0         0         0       11h
+replicaset.apps/kk-payments-67989ff766   0         0         0       10h
+replicaset.apps/kk-payments-679c949577   0         0         0       13h
+replicaset.apps/kk-payments-7b48b6db54   0         0         0       8h
+replicaset.apps/kk-payments-7bf954578b   3         3         3       5h50m
+replicaset.apps/kk-payments-7fdcd65d59   0         0         0       6h49m
+replicaset.apps/kk-payments-856958cdd6   0         0         0       10h
+replicaset.apps/kk-payments-c76f99fcd    0         0         0       13h
+NAME             CLASS   HOSTS          ADDRESS        PORTS   AGE
+kijani-ingress   nginx   kijani.local   192.168.49.2   80      4d15h
