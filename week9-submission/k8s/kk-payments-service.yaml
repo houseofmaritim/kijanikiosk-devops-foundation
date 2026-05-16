@@ -3,11 +3,13 @@ kind: Service
 metadata:
   name: kk-payments
   namespace: kijani-project
+
 spec:
+  type: ClusterIP
+
   selector:
     app: kk-payments
+
   ports:
-    - port: 80
+    - port: 3000
       targetPort: 80
-      protocol: TCP
-  type: ClusterIP

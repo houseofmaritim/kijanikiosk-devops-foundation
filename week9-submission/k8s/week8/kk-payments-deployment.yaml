@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kk-payments
+  namespace: kk-payments
+  labels:
+    app: kk-payments
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: kk-payments
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+
+  template:
+    metadata:
+      labels:
+        app: kk-payments
+
+    spec:
+      containers:
+        - name: kk-payments
+          image: kk-payments:fixed
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 80
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5

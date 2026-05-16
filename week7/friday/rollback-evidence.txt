@@ -1,3 +1,22 @@
+KijaniKiosk Rollback Recovery Evidence
+
+A rollback scenario was simulated for the kk-payments deployment in the kijani-project namespace.
+
+The deployment entered a failed rollout state due to an invalid image revision, causing ImagePullBackOff errors on newly created Pods.
+
+Kubernetes continued serving traffic using healthy existing Pods while rollback monitoring detected the failure and triggered rollback recovery.
+
+Application availability was verified successfully through:
+curl -i http://kijani.local/payments/
+
+Final state:
+- Rollback completed successfully
+- All Pods returned to Running state
+- Ingress routing continued functioning correctly
+- Application returned HTTP 200 OK
+
+Rollback monitor output:
+
 MONITOR START: 23:47:37
 FAIL detected at 23:47:37 (count=1)
 T0 (fault observed): 23:47:37

@@ -1,15 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
-
 metadata:
   name: kk-payments
   namespace: kijani-project
-  annotations:
-    kubernetes.io/change-cause: "Initial production-approaching deployment: v1.1.0"
-
+  annotations: 
+    kubernetes.io/change-cause: "Deliberate regression: v9.9.9-bad does not exist"
+    
 spec:
   replicas: 3
-
   revisionHistoryLimit: 10
 
   strategy:
@@ -30,13 +28,11 @@ spec:
     spec:
       containers:
       - name: kk-payments
-        image: kk-payments:v1.1.0
-
-        securityContext:
-          runAsUser: 0
+        image: kk-payments:v9.9.9-bad
+        imagePullPolicy: Never
 
         ports:
-        - containerPort: 80       
+        - containerPort: 80
 
         envFrom:
         - configMapRef:
