@@ -11,13 +11,22 @@ pipeline {
 
         stage('Deploy Staging') {
             steps {
-                echo 'Deploying to staging namespace...'
+                sh '''
+                    kubectl apply -f capstone/environments/k8s/namespace.yaml
+                    kubectl apply -n kijani-staging -f capstone/environments/k8s/kk-payments-configmap.yaml
+                    kubectl apply -n kijani-staging -f capstone/environments/k8s/kk-payments-deployment.yaml
+                    kubectl apply -n kijani-staging -f capstone/environments/k8s/kk-payments-service.yaml
+                    kubectl rollout status deployment/kk-payments -n kijani-staging
+                '''
             }
         }
 
         stage('Smoke Test') {
             steps {
-                echo 'Running smoke tests on staging...'
+                sh '''
+                    kubectl get pods -n kijani-staging
+                    bash capstone/scripts/smoke-test.sh
+                '''
             }
         }
 
@@ -29,7 +38,11 @@ pipeline {
 
         stage('Deploy Production') {
             steps {
-                echo 'Deploying to production...'
+                sh '''
+                    kubectl apply -n default -f capstone/environments/k8s/kk-payments-configmap.yaml
+                    kubectl apply -n default -f capstone/environments/k8s/kk-payments-deployment.yaml
+                    kubectl apply -n default -f capstone/environments/k8s/kk-payments-service.yaml
+                '''
             }
         }
     }
