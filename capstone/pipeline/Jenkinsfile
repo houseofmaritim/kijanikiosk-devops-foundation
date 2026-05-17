@@ -1,0 +1,36 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Build') {
+            steps {
+                echo 'Building application...'
+            }
+        }
+
+        stage('Deploy Staging') {
+            steps {
+                echo 'Deploying to staging namespace...'
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                echo 'Running smoke tests on staging...'
+            }
+        }
+
+        stage('Approval Gate') {
+            steps {
+                input message: 'Approve production deployment?'
+            }
+        }
+
+        stage('Deploy Production') {
+            steps {
+                echo 'Deploying to production...'
+            }
+        }
+    }
+}

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kk-payments
+  namespace: kk-payments
+spec:
+  selector:
+    app: kk-payments
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 80
