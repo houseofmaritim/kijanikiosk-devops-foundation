@@ -1,0 +1,9 @@
+service: kk-receipt-chain
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+
+functions:
+  receiptHandler:
+    handler: receipt-handler.handler

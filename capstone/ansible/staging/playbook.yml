@@ -1,0 +1,7 @@
+- name: Configure staging environment
+  hosts: staging
+  tasks:
+    - name: Create namespace config file placeholder
+      file:
+        path: /tmp/kijani-staging-ready
+        state: touch

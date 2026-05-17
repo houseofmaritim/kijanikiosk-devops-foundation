@@ -1,0 +1,49 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Build') {
+            steps {
+                echo 'Building application...'
+            }
+        }
+
+        stage('Deploy Staging') {
+            steps {
+                sh '''
+                    kubectl apply -f capstone/environments/k8s/namespace.yaml
+                    kubectl apply -n kijani-staging -f capstone/environments/k8s/kk-payments-configmap.yaml
+                    kubectl apply -n kijani-staging -f capstone/environments/k8s/kk-payments-deployment.yaml
+                    kubectl apply -n kijani-staging -f capstone/environments/k8s/kk-payments-service.yaml
+                    kubectl rollout status deployment/kk-payments -n kijani-staging
+                '''
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh '''
+                    kubectl get pods -n kijani-staging
+                    bash capstone/scripts/smoke-test.sh
+                '''
+            }
+        }
+
+        stage('Approval Gate') {
+            steps {
+                input message: 'Approve production deployment?'
+            }
+        }
+
+        stage('Deploy Production') {
+            steps {
+                sh '''
+                    kubectl apply -n default -f capstone/environments/k8s/kk-payments-configmap.yaml
+                    kubectl apply -n default -f capstone/environments/k8s/kk-payments-deployment.yaml
+                    kubectl apply -n default -f capstone/environments/k8s/kk-payments-service.yaml
+                '''
+            }
+        }
+    }
+}
